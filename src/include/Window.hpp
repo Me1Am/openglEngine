@@ -11,9 +11,10 @@
 #include <string>
 #include <cmath>
 
-#include "include/ObjectHandler.hpp"
-#include "include/shader/BaseShader.hpp"
-#include "include/Camera.hpp"
+#include "ObjectHandler.hpp"
+#include "shader/BaseShader.hpp"
+#include "Camera.hpp"
+#include "UI.hpp"
 
 class Window {
 	public:
@@ -136,15 +137,22 @@ class Window {
 			GLint status = GL_FALSE;
 
 			glViewport(0, 0, width, height);
-			glEnable(GL_DEPTH_TEST);
 			glEnable(GL_CULL_FACE);
+			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_LESS);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
 
 			if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag")){
 				std::cerr << "Unable to load model shader" << std::endl;
 				return false;
 			}
+			if(!textShader.loadProgram("../shaders/text.vert", "../shaders/text.frag")){
+				std::cerr << "Unable to load UI text shader" << std::endl;
+				return false;
+			}
+
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
 
 			return true;
@@ -295,6 +303,8 @@ class Window {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
 			
+			ui.RenderText(textShader, "HELP ME", 25.f, 25.f, 1.f, glm::vec3(1.f, 0.f, 0.f));
+
 			glUseProgram(0);	// Unbind
 			
 			glFlush();
@@ -324,6 +334,8 @@ class Window {
 
 		// Objects
 		BaseShader baseShader;
+		TextShader textShader;
 		Camera camera;
+		UI ui;
 		short uid;
 };

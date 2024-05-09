@@ -266,7 +266,7 @@ class BaseShader {
 			
 			delete[] infoLog;
 		}
-    private:
+    protected:
 		GLuint programID;
         GLfloat rotationRad = 0.f;
 		
