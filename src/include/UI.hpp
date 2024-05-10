@@ -25,7 +25,7 @@ struct Text {
  * @brief Freetype Char
 */
 struct FChar {
-    uint textureID;		// Character texture ID
+    GLuint textureID;	// Character texture ID
     glm::ivec2 size;	// Size of character
     glm::ivec2 bearing;	// Offset from baseline to left/top of character
     long int advance;	// Offset to advance to next character
@@ -34,7 +34,11 @@ struct FChar {
 class UI {
 	public:
 		UI() {
-			loadFChars(128, "../assets/fonts/arial.ttf");
+			#ifdef WIN32
+				loadFChars(128, "c:\\Windows\\Fonts\\arial.ttf");
+			#else
+				loadFChars(128, "/home/main/.local/share/fonts/common-web/Arial.TTF");
+			#endif
 		}
 		UI(std::string font) {
 			loadFChars(128, font);
@@ -52,8 +56,8 @@ class UI {
 				return false;
 			}
 			FT_Face face;
-			if(FT_New_Face(ft, ("fonts/" + font).c_str(), 0, &face)){
-				std::cerr << "UI::loadFChars(): Unable to load font '" << font << "'" << std::endl;
+			if(FT_New_Face(ft, font.c_str(), 0, &face)){
+				std::cerr << "UI::loadFChars(): Unable to load font \"" << font << "\"" << std::endl;
 				return false;
 			}
 
@@ -80,16 +84,16 @@ class UI {
 					GL_UNSIGNED_BYTE,
 					face->glyph->bitmap.buffer
 				);
+				
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				
-				// Save character
+
 				FChar character = {
 					texture, 
-					glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
-					glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+					glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows), 
+					glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top), 
 					face->glyph->advance.x
 				};
 				fChars.insert(std::pair<char, FChar>(c, character));
@@ -98,6 +102,8 @@ class UI {
 			// Free
 			FT_Done_Face(face);
 			FT_Done_FreeType(ft);
+			
+			glBindTexture(GL_TEXTURE_2D, 0);
 
 			return true;
 		}
@@ -106,9 +112,10 @@ class UI {
 		*/
 		void drawText(BaseShader &shader, std::string text, glm::vec2 pos, glm::vec3 color) {}
 
-		void RenderText(TextShader &shader, std::string text, float x, float y, float scale, glm::vec3 color) {
+		void renderText(TextShader &shader, std::string text, float x, float y, float scale, glm::vec3 color) {
 			shader.bind();
 			shader.setColor(color);
+			shader.setPos(glm::vec3(640.f, 480.f, 0.f));
 
 			glActiveTexture(GL_TEXTURE0);
 			glBindVertexArray(shader.getVAO());
@@ -116,7 +123,8 @@ class UI {
 			// Draw each character
 			std::string::const_iterator charIter;
 			for(charIter = text.begin(); charIter != text.end(); charIter++) {
-				FChar ch = fChars[*charIter];
+				if((fChars.find(*charIter)) == fChars.end()) continue;	// Character not in map
+				FChar ch = fChars.find(*charIter)->second;
 
 				float xpos = x + ch.bearing.x * scale;
 				float ypos = y - (ch.size.y - ch.bearing.y) * scale;	// Account for the distance below the baseline(size.y - bearing.y) for 'g', 'p', etc.
@@ -134,7 +142,7 @@ class UI {
 					{ xpos + width, ypos, 1.0f, 1.0f },
 					{ xpos + width, ypos + height, 1.0f, 0.0f }           
 				};
-
+				
 				glBindTexture(GL_TEXTURE_2D, ch.textureID);
 				glBindBuffer(GL_ARRAY_BUFFER, shader.getVBO());
 				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);

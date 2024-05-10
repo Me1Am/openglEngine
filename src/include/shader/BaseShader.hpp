@@ -46,7 +46,7 @@ class BaseShader {
 			GLenum error = glGetError();
 			if(error != GL_NO_ERROR) {
 				std::cout << "Error binding shader: " << std::endl;
-				printProgramLog( programID );
+				printProgramLog(programID);
 				return false;
 			}
 

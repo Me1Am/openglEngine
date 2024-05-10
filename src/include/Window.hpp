@@ -141,8 +141,7 @@ class Window {
 			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_LESS);
 			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
-
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 			if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag")){
 				std::cerr << "Unable to load model shader" << std::endl;
@@ -154,7 +153,14 @@ class Window {
 			}
 
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
+			
+			ui = new UI();
 
+			GLenum err = glGetError(); 
+			if(err != GL_NO_ERROR) {
+				std::cout << "Unhandled OpenGL Error: " << err << std::endl;
+				return false;
+			}
 			return true;
 		}
 		/// Main loop
@@ -302,8 +308,8 @@ class Window {
 			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
-			
-			ui.RenderText(textShader, "HELP ME", 25.f, 25.f, 1.f, glm::vec3(1.f, 0.f, 0.f));
+
+			ui->renderText(textShader, "help me", 320.f, 240.f, 1.f, glm::vec3(1.f, 0.f, 0.f));
 
 			glUseProgram(0);	// Unbind
 			
@@ -336,6 +342,6 @@ class Window {
 		BaseShader baseShader;
 		TextShader textShader;
 		Camera camera;
-		UI ui;
+		UI* ui;
 		short uid;
 };

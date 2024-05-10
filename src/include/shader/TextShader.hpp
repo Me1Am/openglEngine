@@ -88,17 +88,7 @@ class TextShader : public BaseShader {
 			// Unbind
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			glBindVertexArray(0);
-
-			// Set position
-			glUniformMatrix4fv(
-				glGetUniformLocation(programID, "projection"), 
-				1, 
-				GL_FALSE, 
-				glm::value_ptr(
-					glm::ortho(0.0f, pos.x, 0.0f, pos.y)
-				)
-			);
-
+			
 			return true;
 		}
 		/**
