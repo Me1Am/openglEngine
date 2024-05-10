@@ -24,14 +24,15 @@ set(SOURCES
 )
 
 if(WIN32)
-	set(CMAKE_CXX_COMPILER "C:/Users/JTK6759/Documents/apps/msys2/ucrt64/bin/g++.exe")
-	set(COMPILE_FLAGS="-g -Wall -Dmain=SDL_main")
+set(CMAKE_CXX_COMPILER "C:/Users/JTK6759/Documents/apps/msys2/ucrt64/bin/g++.exe")
+set(COMPILE_FLAGS="-g -Wall -Dmain=SDL_main")
 
-	add_link_options("-lmingw32" "-lSDL2" "-lSDL2main" "-lSOIL" "-lfreeglut" "-lglew32" "-lopengl32" "-lassimp" "-lfreetype")
-	add_executable(openglEngine)
+add_link_options("-lmingw32" "-lSDL2" "-lSDL2main" "-lSOIL" "-lfreeglut" "-lglew32" "-lopengl32" "-lassimp" "-lfreetype")
+add_executable(openglEngine)
 
-	target_compile_definitions(openglEngine PRIVATE DEBUG)
-	target_link_libraries(openglEngine PRIVATE SDL2 SOIL opengl32 glew32 freeglut assimp freetype)
+target_include_directories(openglEngine PRIVATE "C:/Users/JTK6759/Documents/apps/msys2/ucrt64/include/freetype2/")
+target_compile_definitions(openglEngine PRIVATE DEBUG WIN32)
+target_link_libraries(openglEngine PRIVATE SDL2 SOIL opengl32 glew32 freeglut assimp freetype)
 else()
 	set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 	set(COMPILE_FLAGS="-g -Wall")
