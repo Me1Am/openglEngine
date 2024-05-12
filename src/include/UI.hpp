@@ -10,19 +10,44 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 #include <map>
+#include <sstream>
+#include <variant>
 
 #include "shader/TextShader.hpp"
 
-struct Text {
-	std::string text;
-	glm::vec2 pos;
+using DynamicValue = std::variant<int, float, Uint32, std::string>;
 
+/**
+ * @brief UI Text
+*/
+struct Text {
+	std::string text;	// String
+	glm::vec2 pos;		// 2D position on the screen, top-left corner of the text, origin in bottom left-corner
+	glm::vec3 color;	// RGB, from 0-1, inclusive
+	float scale;		// Scale of 48 pixels
+};
+
+/**
+ * @brief Dynamic UI Text
+ * @note Holds a weak_ptr to the dynamic value
+ * @note Use '<%>' in place where the value would go
+*/
+template<typename T>
+struct DynamicText : public Text {
+	std::weak_ptr<T> dynamicVal;	// Weak_ptr to object or value to track
+
+	DynamicText(const std::shared_ptr<T>& val) : dynamicVal(val) {}
+	DynamicText(const std::shared_ptr<T>& val, Text base) : Text(base), dynamicVal(val) {}
+	std::string getVal() { std::stringstream ss; ss << *dynamicVal.lock(); return ss.str(); }
 };
 
 /**
  * @brief Freetype Char
+ * @note 
 */
 struct FChar {
     GLuint textureID;	// Character texture ID
@@ -30,6 +55,8 @@ struct FChar {
     glm::ivec2 bearing;	// Offset from baseline to left/top of character
     long int advance;	// Offset to advance to next character
 };
+
+using DynamicTextTypes = std::variant<DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;
 
 class UI {
 	public:
@@ -108,39 +135,100 @@ class UI {
 			return true;
 		}
 		/**
-		 * @brief Draws arbitrary text on the screen as UI elements
+		 * @brief Add a Text struct to the Text vector
 		*/
-		void drawText(BaseShader &shader, std::string text, glm::vec2 pos, glm::vec3 color) {}
+		void addTextElement(const Text element) {
+			std::string::const_iterator charIter;
+			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
+				if((fChars.find(*charIter)) == fChars.end()){
+					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
+					/* I have no idea if this would work:
+					 * std::cerr << "Character \"" << *charIter << "\" not found. Using \"-\"" << std::endl;
+					 * element.text.replace(charIter, 1, '-');*/
+				}
+			}
+			textElements.push_back(std::make_unique<Text>(element));
+		}
+		/**
+		 * @brief Add a DynamicText struct to the DynamicText vector
+		*/
+		template<typename T>
+		void addTextElement(const DynamicText<T> element) {
+			std::string::const_iterator charIter;
+			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
+				if((fChars.find(*charIter)) == fChars.end()){
+					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
+				}
+			}
+			dynamicTextElements.push_back(std::make_unique<DynamicTextTypes>(element));
+		}
+		/**
+		 * @brief Draw text elements on the screen
+		*/
+		void drawTextElements(TextShader& shader) {
+			// Regular text elements
+			for(const auto& element : textElements) {
+				renderText(shader, *element);
+			}
 
-		void renderText(TextShader &shader, std::string text, float x, float y, float scale, glm::vec3 color) {
+			// Dynamic text elements
+			Text out;
+			for(const auto& element : dynamicTextElements) {
+				auto temp = element.get();
+				// Struct vals
+				std::string val;
+
+				std::visit([&val](const auto& value) {	// Get the dynamic value
+					if(value.dynamicVal.expired()){ val = "NULL"; return; }
+					std::stringstream ss; ss << *value.dynamicVal.lock(); val = ss.str();
+				}, *temp);
+				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
+
+				// Replace text with dynamic value
+				size_t start_pos = out.text.find("<%>");
+				if(start_pos == std::string::npos){
+					std::cerr << "FAIL\n";
+					continue;
+				} else {
+					out.text.replace(start_pos, size_t(3), val);
+				}
+				renderText(shader, out);
+			}
+		}
+
+		/**
+		 * @brief Draws arbitrary text on the screen
+		*/
+		void renderText(TextShader &shader, Text &text) {
 			shader.bind();
-			shader.setColor(color);
+			shader.setColor(text.color);
 			shader.setPos(glm::vec3(640.f, 480.f, 0.f));
 
 			glActiveTexture(GL_TEXTURE0);
 			glBindVertexArray(shader.getVAO());
 
 			// Draw each character
+			float x = text.pos.x;	// X position of the next character
 			std::string::const_iterator charIter;
-			for(charIter = text.begin(); charIter != text.end(); charIter++) {
+			for(charIter = text.text.begin(); charIter != text.text.end(); charIter++) {
 				if((fChars.find(*charIter)) == fChars.end()) continue;	// Character not in map
 				FChar ch = fChars.find(*charIter)->second;
 
-				float xpos = x + ch.bearing.x * scale;
-				float ypos = y - (ch.size.y - ch.bearing.y) * scale;	// Account for the distance below the baseline(size.y - bearing.y) for 'g', 'p', etc.
+				float xpos = x + ch.bearing.x * text.scale;
+				float ypos = text.pos.y - (ch.size.y - ch.bearing.y) * text.scale;	// Account for the distance below the baseline(size.y - bearing.y) for 'g', 'p', etc.
 
-				float width = ch.size.x * scale;
-				float height = ch.size.y * scale;
+				float width = ch.size.x * text.scale;
+				float height = ch.size.y * text.scale;
 
 				// Update VBO
 				float vertices[6][4] = {
-					{ xpos, ypos + height, 0.0f, 0.0f },            
-					{ xpos, ypos, 0.0f, 1.0f },
-					{ xpos + width, ypos, 1.0f, 1.0f },
+					{ xpos, ypos + height, 0.f, 0.f },            
+					{ xpos, ypos, 0.f, 1.f },
+					{ xpos + width, ypos, 1.f, 1.f },
 
-					{ xpos, ypos + height, 0.0f, 0.0f },
-					{ xpos + width, ypos, 1.0f, 1.0f },
-					{ xpos + width, ypos + height, 1.0f, 0.0f }           
+					{ xpos, ypos + height, 0.f, 0.f },
+					{ xpos + width, ypos, 1.f, 1.f },
+					{ xpos + width, ypos + height, 1.f, 0.f }           
 				};
 				
 				glBindTexture(GL_TEXTURE_2D, ch.textureID);
@@ -151,11 +239,13 @@ class UI {
 				glDrawArrays(GL_TRIANGLES, 0, 6);
 
 				// Adjust next X position for the next character
-				x += (ch.advance >> 6) * scale; // Bitshift by 6 to get value in pixels
+				x += (ch.advance >> 6) * text.scale; // Bitshift by 6 to get value in pixels
 			}
 			glBindVertexArray(0);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 	private:
 		std::map<char, FChar> fChars;
+		std::vector<std::unique_ptr<Text>> textElements;
+		std::vector<std::unique_ptr<DynamicTextTypes>> dynamicTextElements;
 };

@@ -154,7 +154,11 @@ class Window {
 
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
 			
+			delta_t.reset(new Uint32(16));
+
 			ui = new UI();
+			ui->addTextElement(DynamicText<Uint32>(delta_t, { "Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f }));
+			ui->addTextElement({ "help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f });
 
 			GLenum err = glGetError(); 
 			if(err != GL_NO_ERROR) {
@@ -258,9 +262,9 @@ class Window {
 				// Update roll
 				if(!paused){
 					if(keyboard[SDL_SCANCODE_E]){
-						camera.incRoll(1.5f * deltaTime / 1000);	// Roll right(increase)
+						camera.incRoll(1.5f * *delta_t / 1000);	// Roll right(increase)
 					} else if(keyboard[SDL_SCANCODE_Q]) {
-						camera.incRoll(-1.5f * deltaTime / 1000);	// Roll left(decrease)
+						camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
 					}
 				}
 
@@ -268,12 +272,9 @@ class Window {
 
 				// Framerate Handling
 				Uint32 currentTime = SDL_GetTicks();
-				deltaTime = currentTime - prevTime;
+				*delta_t = currentTime - prevTime;
 				if(SDL_GL_GetSwapInterval() != 1){
-					SDL_Delay((deltaTime < MIN_FRAME_TIME) ? MIN_FRAME_TIME - deltaTime : 0);
-					std::cout << "Frametime: " << deltaTime << 
-								" | Limited Frametime: " << SDL_GetTicks() - prevTime << 
-								" | Delay Time: " << ((deltaTime < MIN_FRAME_TIME) ? MIN_FRAME_TIME - deltaTime : 0) << std::endl;
+					SDL_Delay((*delta_t < MIN_FRAME_TIME) ? MIN_FRAME_TIME - *delta_t : 0);
 				}
 				prevTime = SDL_GetTicks();
 			}
@@ -299,7 +300,7 @@ class Window {
 					keyboard[SDL_SCANCODE_D], 
 					keyboard[SDL_SCANCODE_SPACE], 
 					keyboard[SDL_SCANCODE_LCTRL], 
-					deltaTime
+					*delta_t
 				);
 				camera.updateCameraDirection();
 			}
@@ -308,9 +309,9 @@ class Window {
 			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
-
-			ui->renderText(textShader, "help me", 320.f, 240.f, 1.f, glm::vec3(1.f, 0.f, 0.f));
-
+						
+			ui->drawTextElements(textShader);
+			
 			glUseProgram(0);	// Unbind
 			
 			glFlush();
@@ -325,10 +326,11 @@ class Window {
 		// Running Window Variables
 		int width;			// The running drawable window width
 		int height;			// The running drawable window width
-		Uint32 deltaTime;	// The running time between frames
 		Uint32 prevTime;	// The running time from init last frame was
 		bool paused;
 		bool zBuffer;
+
+		std::shared_ptr<Uint32> delta_t;	// The running time between frames
 
 		// Running Mouse Variables
 		Uint32 mouseButtonState;	// Mouse buttons state
@@ -337,6 +339,7 @@ class Window {
 		const Uint8* keyboard;		// The running state of the keyboard
 		const float SENSITIVITY;	// Mouse sensitivity
 		const float MIN_FRAME_TIME;	// Minimum frame time in ms
+
 
 		// Objects
 		BaseShader baseShader;
