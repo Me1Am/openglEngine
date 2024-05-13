@@ -118,6 +118,9 @@ class Window {
 				std::cout << "Warning: Unable to enable VSync, SDL_Error: " << SDL_GetError() << std::endl;
 			}
 
+			// Initialize shared variables
+			delta_t.reset(new Uint32(0));
+
 			// Initialize OpenGL
 			if(!initOpenGL()){
 				std::cout << "Unable to initialize OpenGL" << std::endl;
@@ -154,10 +157,9 @@ class Window {
 
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
 			
-			delta_t.reset(new Uint32(16));
-
 			ui = new UI();
 			ui->addTextElement(DynamicText<Uint32>(delta_t, { "Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f }));
+			ui->addTextElement({ "Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f });
 			ui->addTextElement({ "help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f });
 
 			GLenum err = glGetError(); 
@@ -205,6 +207,7 @@ class Window {
 							// Toggle mouse visibility and capture state with escape key
 							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
 								paused = !paused;
+								
 								SDL_SetRelativeMouseMode((SDL_bool)(!paused));
 								SDL_ShowCursor((SDL_bool)(paused));
 							}
@@ -258,17 +261,9 @@ class Window {
 							break;
 					}
 				}
-				/* Constant Logic */
-				// Update roll
-				if(!paused){
-					if(keyboard[SDL_SCANCODE_E]){
-						camera.incRoll(1.5f * *delta_t / 1000);	// Roll right(increase)
-					} else if(keyboard[SDL_SCANCODE_Q]) {
-						camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
-					}
-				}
 
-				render();	// Render
+				tick();
+				render();
 
 				// Framerate Handling
 				Uint32 currentTime = SDL_GetTicks();
@@ -286,14 +281,28 @@ class Window {
 
 			glViewport(0, 0, width, height);	// Update OpenGL viewport
 		}
-		/// Render
-		void render() {
-			glClearColor(0.02f, 0.02f, 0.02f, 0.f);	// Set clear color
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		/// Run Logic
+		void tick() {
+			// Constant Logic
+			
+			// Runtime Logic
+			if(paused){	// Paused Logic
 
-			// Only update the camera if its not paused
-			if(!paused){
-				camera.updateCameraPosition(	// Update camera position for view calculations
+			} else {	// Runtime Logic
+				if(keyboard[SDL_SCANCODE_E]){
+					camera.incRoll(1.5f * *delta_t / 1000);		// Roll right(increase)
+				} else if(keyboard[SDL_SCANCODE_Q]) {
+					camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
+				}
+				// Roll
+				if(keyboard[SDL_SCANCODE_E]){
+					camera.incRoll(1.5f * *delta_t / 1000);		// Roll right(increase)
+				} else if(keyboard[SDL_SCANCODE_Q]) {
+					camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
+				}
+
+				// Camera position for view calculations
+				camera.updateCameraPosition(
 					keyboard[SDL_SCANCODE_W], 
 					keyboard[SDL_SCANCODE_S], 
 					keyboard[SDL_SCANCODE_A], 
@@ -304,6 +313,12 @@ class Window {
 				);
 				camera.updateCameraDirection();
 			}
+		}
+		
+		/// Render
+		void render() {
+			glClearColor(0.02f, 0.02f, 0.02f, 0.f);	// Set clear color
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			// Draw all objects
 			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
@@ -327,9 +342,10 @@ class Window {
 		int width;			// The running drawable window width
 		int height;			// The running drawable window width
 		Uint32 prevTime;	// The running time from init last frame was
-		bool paused;
 		bool zBuffer;
+		bool paused;
 
+		// Shared variables
 		std::shared_ptr<Uint32> delta_t;	// The running time between frames
 
 		// Running Mouse Variables

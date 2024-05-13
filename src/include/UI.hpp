@@ -19,7 +19,7 @@
 
 #include "shader/TextShader.hpp"
 
-using DynamicValue = std::variant<int, float, Uint32, std::string>;
+using DynamicValue = std::variant<bool, int, float, Uint32, std::string>;
 
 /**
  * @brief UI Text
@@ -29,6 +29,7 @@ struct Text {
 	glm::vec2 pos;		// 2D position on the screen, top-left corner of the text, origin in bottom left-corner
 	glm::vec3 color;	// RGB, from 0-1, inclusive
 	float scale;		// Scale of 48 pixels
+	bool visible = true;
 };
 
 /**
@@ -42,7 +43,32 @@ struct DynamicText : public Text {
 
 	DynamicText(const std::shared_ptr<T>& val) : dynamicVal(val) {}
 	DynamicText(const std::shared_ptr<T>& val, Text base) : Text(base), dynamicVal(val) {}
-	std::string getVal() { std::stringstream ss; ss << *dynamicVal.lock(); return ss.str(); }
+	std::string getVal() const {
+		if(dynamicVal.expired()){ return "NULL"; }
+		std::stringstream ss;
+		if(std::is_same<bool, T>::value)
+			ss << std::boolalpha;	// Actually print true or false
+		ss << *dynamicVal.lock();
+		return ss.str();
+	}
+};
+
+//TODO Allow modification of all other values, not just visibility
+/**
+ * @brief Dynamic UI Text with a modifier
+ * @note Holds a function object to a function to change its visibility, depending on dynamicVal
+*/
+template<typename T>
+struct DynamicTextFunct : public DynamicText<T> {
+	template<typename U>
+	void mod(U&& lambda) {
+		if(lambda()) this->visibility = true;
+		else this->visibility = false;
+	}
+
+	DynamicTextFunct(const std::shared_ptr<T>& val) : DynamicText<T>(val) {}
+	DynamicTextFunct(const std::shared_ptr<T>& val, Text base) : DynamicText<T>(val, base) {}
+	DynamicTextFunct(DynamicText<T> base) : DynamicText<T>(base) {}
 };
 
 /**
@@ -56,7 +82,7 @@ struct FChar {
     long int advance;	// Offset to advance to next character
 };
 
-using DynamicTextTypes = std::variant<DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;
+using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;
 
 class UI {
 	public:
@@ -168,7 +194,8 @@ class UI {
 		void drawTextElements(TextShader& shader) {
 			// Regular text elements
 			for(const auto& element : textElements) {
-				renderText(shader, *element);
+				if(element.get()->visible)
+					renderText(shader, *element);
 			}
 
 			// Dynamic text elements
@@ -177,12 +204,10 @@ class UI {
 				auto temp = element.get();
 				// Struct vals
 				std::string val;
-
-				std::visit([&val](const auto& value) {	// Get the dynamic value
-					if(value.dynamicVal.expired()){ val = "NULL"; return; }
-					std::stringstream ss; ss << *value.dynamicVal.lock(); val = ss.str();
-				}, *temp);
+				
 				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
+				if(!out.visible) continue;	// Skip if not visible
+				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get they dynamic value as a string
 
 				// Replace text with dynamic value
 				size_t start_pos = out.text.find("<%>");
