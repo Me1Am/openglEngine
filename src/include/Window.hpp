@@ -120,6 +120,7 @@ class Window {
 
 			// Initialize shared variables
 			delta_t.reset(new Uint32(0));
+			pause.reset(new bool(true));
 
 			// Initialize OpenGL
 			if(!initOpenGL()){
@@ -159,7 +160,11 @@ class Window {
 			
 			ui = new UI();
 			ui->addTextElement(DynamicText<Uint32>(delta_t, { "Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f }));
-			ui->addTextElement({ "Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f });
+			ui->addTextElement(DynamicTextFunct<bool>(
+				[](DynamicTextFunct<bool>& self) { if(!self.dynamicVal.expired()) self.visible = *self.dynamicVal.lock(); }, 
+				pause, 
+				{ "Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f }
+			));
 			ui->addTextElement({ "help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f });
 
 			GLenum err = glGetError(); 
@@ -207,6 +212,7 @@ class Window {
 							// Toggle mouse visibility and capture state with escape key
 							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
 								paused = !paused;
+								*pause = !(*pause);
 								
 								SDL_SetRelativeMouseMode((SDL_bool)(!paused));
 								SDL_ShowCursor((SDL_bool)(paused));
@@ -347,6 +353,7 @@ class Window {
 
 		// Shared variables
 		std::shared_ptr<Uint32> delta_t;	// The running time between frames
+		std::shared_ptr<bool> pause;
 
 		// Running Mouse Variables
 		Uint32 mouseButtonState;	// Mouse buttons state

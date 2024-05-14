@@ -16,10 +16,9 @@
 #include <map>
 #include <sstream>
 #include <variant>
+#include <functional>
 
 #include "shader/TextShader.hpp"
-
-using DynamicValue = std::variant<bool, int, float, Uint32, std::string>;
 
 /**
  * @brief UI Text
@@ -43,7 +42,7 @@ struct DynamicText : public Text {
 
 	DynamicText(const std::shared_ptr<T>& val) : dynamicVal(val) {}
 	DynamicText(const std::shared_ptr<T>& val, Text base) : Text(base), dynamicVal(val) {}
-	std::string getVal() const {
+	virtual std::string getVal() const {
 		if(dynamicVal.expired()){ return "NULL"; }
 		std::stringstream ss;
 		if(std::is_same<bool, T>::value)
@@ -53,22 +52,32 @@ struct DynamicText : public Text {
 	}
 };
 
-//TODO Allow modification of all other values, not just visibility
 /**
  * @brief Dynamic UI Text with a modifier
- * @note Holds a function object to a function to change its visibility, depending on dynamicVal
+ * @note Holds a function object to change its state, depending on dynamicVal
+ * @note The funciton object is called automatically when using getVal()
 */
 template<typename T>
 struct DynamicTextFunct : public DynamicText<T> {
-	template<typename U>
-	void mod(U&& lambda) {
-		if(lambda()) this->visibility = true;
-		else this->visibility = false;
-	}
+	std::function<void()> mod;	// Function object which can modify the state of the struct, depending on the dynamicVal
 
-	DynamicTextFunct(const std::shared_ptr<T>& val) : DynamicText<T>(val) {}
-	DynamicTextFunct(const std::shared_ptr<T>& val, Text base) : DynamicText<T>(val, base) {}
-	DynamicTextFunct(DynamicText<T> base) : DynamicText<T>(base) {}
+	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	 const std::shared_ptr<T>& val) : DynamicText<T>(val) {
+		mod = [this, modifier]() { modifier(*this); };
+	}
+	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	 const std::shared_ptr<T>& val, const Text base) : DynamicText<T>(val, base) {
+		mod = [this, modifier]() { modifier(*this); };
+	}
+	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	 const DynamicText<T> base) : DynamicText<T>(base) {
+		mod = [this, modifier]() { modifier(*this); };
+	}
+	std::string getVal() const override {
+		std::cout << "OVERRIDE\n";
+		mod();	// Will always run before drawing because 'getVal()' is always called
+		return DynamicText<T>::getVal();	// Return the dynamicVal
+	}
 };
 
 /**
@@ -82,7 +91,9 @@ struct FChar {
     long int advance;	// Offset to advance to next character
 };
 
-using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;
+// MORE MORE MORE
+using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;//, 
+			//DynamicTextFunct<bool>, DynamicTextFunct<int>, DynamicTextFunct<Uint32>, DynamicTextFunct<float>, DynamicTextFunct<std::string>>;
 
 class UI {
 	public:
@@ -202,21 +213,19 @@ class UI {
 			Text out;
 			for(const auto& element : dynamicTextElements) {
 				auto temp = element.get();
+				
+				
 				// Struct vals
 				std::string val;
 				
+				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get the dynamic value as a string
 				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
 				if(!out.visible) continue;	// Skip if not visible
-				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get they dynamic value as a string
 
 				// Replace text with dynamic value
 				size_t start_pos = out.text.find("<%>");
-				if(start_pos == std::string::npos){
-					std::cerr << "FAIL\n";
-					continue;
-				} else {
+				if(start_pos != std::string::npos)
 					out.text.replace(start_pos, size_t(3), val);
-				}
 				renderText(shader, out);
 			}
 		}
