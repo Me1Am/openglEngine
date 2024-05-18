@@ -92,8 +92,8 @@ struct FChar {
 };
 
 // MORE MORE MORE
-using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>>;//, 
-			//DynamicTextFunct<bool>, DynamicTextFunct<int>, DynamicTextFunct<Uint32>, DynamicTextFunct<float>, DynamicTextFunct<std::string>>;
+using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>, 
+			DynamicTextFunct<bool>, DynamicTextFunct<int>, DynamicTextFunct<Uint32>, DynamicTextFunct<float>, DynamicTextFunct<std::string>>;
 
 class UI {
 	public:
@@ -200,6 +200,19 @@ class UI {
 			dynamicTextElements.push_back(std::make_unique<DynamicTextTypes>(element));
 		}
 		/**
+		 * @brief Add a DynamicTextFunct struct to the DynamicText vector
+		*/
+		template<typename T>
+		void addTextElement(const DynamicTextFunct<T> element) {
+			std::string::const_iterator charIter;
+			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
+				if((fChars.find(*charIter)) == fChars.end()){
+					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
+				}
+			}
+			dynamicTextElements.push_back(std::make_unique<DynamicTextTypes>(element));
+		}
+		/**
 		 * @brief Draw text elements on the screen
 		*/
 		void drawTextElements(TextShader& shader) {
@@ -210,8 +223,8 @@ class UI {
 			}
 
 			// Dynamic text elements
-			Text out;
 			for(const auto& element : dynamicTextElements) {
+				Text out;
 				auto temp = element.get();
 				
 				
@@ -220,7 +233,7 @@ class UI {
 				
 				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get the dynamic value as a string
 				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
-				if(!out.visible) continue;	// Skip if not visible
+				if(!out.visible) std::cout<<"A\n";	// Skip if not visible
 
 				// Replace text with dynamic value
 				size_t start_pos = out.text.find("<%>");
