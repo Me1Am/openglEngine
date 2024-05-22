@@ -29,6 +29,9 @@ struct Text {
 	glm::vec3 color;	// RGB, from 0-1, inclusive
 	float scale;		// Scale of 48 pixels
 	bool visible = true;
+
+	Text(std::string text, glm::vec2 pos, glm::vec3 color, float scale, bool visible = true) : text(text), pos(pos), color(color), scale(scale), visible(visible) {}
+	Text() {}
 };
 
 /**
@@ -59,23 +62,25 @@ struct DynamicText : public Text {
 */
 template<typename T>
 struct DynamicTextFunct : public DynamicText<T> {
-	std::function<void()> mod;	// Function object which can modify the state of the struct, depending on the dynamicVal
+	std::function<Text*()> mod;	// Function object which can modify the state of the struct, depending on the dynamicVal
 
-	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
 	 const std::shared_ptr<T>& val) : DynamicText<T>(val) {
-		mod = [this, modifier]() { modifier(*this); };
+		mod = [this, modifier]() { return modifier(*this); };
 	}
-	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
 	 const std::shared_ptr<T>& val, const Text base) : DynamicText<T>(val, base) {
-		mod = [this, modifier]() { modifier(*this); };
+		mod = [this, modifier]() { return modifier(*this); };
 	}
-	DynamicTextFunct(const std::function<void(DynamicTextFunct<T>&)> modifier, 
+	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
 	 const DynamicText<T> base) : DynamicText<T>(base) {
-		mod = [this, modifier]() { modifier(*this); };
+		mod = [this, modifier]() { return modifier(*this); };
 	}
 	std::string getVal() const override {
-		std::cout << "OVERRIDE\n";
-		mod();	// Will always run before drawing because 'getVal()' is always called
+		std::cout << "OVERRIDE " << this->text << "\n";
+		Text* a = mod();	// Will always run before drawing because 'getVal()' is always called
+		delete a;
+		std::cout << "END OVERRIDE " << this->text << "\n";
 		return DynamicText<T>::getVal();	// Return the dynamicVal
 	}
 };
@@ -227,10 +232,9 @@ class UI {
 				Text out;
 				auto temp = element.get();
 				
-				
 				// Struct vals
 				std::string val;
-				
+
 				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get the dynamic value as a string
 				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
 				if(!out.visible) std::cout<<"A\n";	// Skip if not visible

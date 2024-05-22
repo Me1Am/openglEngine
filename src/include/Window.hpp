@@ -161,7 +161,15 @@ class Window {
 			ui = new UI();
 			ui->addTextElement(DynamicText<Uint32>(delta_t, { "Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f }));
 			ui->addTextElement(DynamicTextFunct<bool>(
-				[](DynamicTextFunct<bool>& self) { if(!self.dynamicVal.expired()) self.visible = *self.dynamicVal.lock(); }, 
+				[](DynamicTextFunct<bool>& self) {
+					if(!self.dynamicVal.expired()){
+						self.visible = *self.dynamicVal.lock();
+						Text* a = new Text(self.text, self.pos, self.color, self.scale, self.visible);
+						return a;
+					} else {
+						return new Text();
+					}
+				}, 
 				pause, 
 				{ "Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f }
 			));
