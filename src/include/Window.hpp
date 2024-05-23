@@ -159,21 +159,16 @@ class Window {
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
 			
 			ui = new UI();
-			ui->addTextElement(DynamicText<Uint32>(delta_t, { "Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f }));
-			ui->addTextElement(DynamicTextFunct<bool>(
-				[](DynamicTextFunct<bool>& self) {
-					if(!self.dynamicVal.expired()){
-						self.visible = *self.dynamicVal.lock();
-						Text* a = new Text(self.text, self.pos, self.color, self.scale, self.visible);
-						return a;
-					} else {
-						return new Text();
-					}
-				}, 
+			ui->addTextElement(std::make_unique<Text>(Text("help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f, true)));
+			ui->addTextElement(std::make_unique<DynamicText>(Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), delta_t, [](DynamicText& e){ }));
+			ui->addTextElement(std::make_unique<DynamicText>(
+				Text("Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f, true), 
 				pause, 
-				{ "Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f }
+				[](DynamicText& e){
+					if(e.dynamicVal.expired()) return;
+					e.visible = *std::static_pointer_cast<bool>(e.dynamicVal.lock());
+				}
 			));
-			ui->addTextElement({ "help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f });
 
 			GLenum err = glGetError(); 
 			if(err != GL_NO_ERROR) {

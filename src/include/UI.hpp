@@ -1,13 +1,8 @@
-#pragma once
-
 #include <freetype2/ft2build.h>
 #include FT_FREETYPE_H
 
-#include <GL/glew.h>
-#include <GL/glu.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include <iostream>
 #include <memory>
@@ -21,84 +16,123 @@
 #include "shader/TextShader.hpp"
 
 /**
- * @brief UI Text
-*/
-struct Text {
-	std::string text;	// String
-	glm::vec2 pos;		// 2D position on the screen, top-left corner of the text, origin in bottom left-corner
-	glm::vec3 color;	// RGB, from 0-1, inclusive
-	float scale;		// Scale of 48 pixels
-	bool visible = true;
-
-	Text(std::string text, glm::vec2 pos, glm::vec3 color, float scale, bool visible = true) : text(text), pos(pos), color(color), scale(scale), visible(visible) {}
-	Text() {}
-};
-
-/**
- * @brief Dynamic UI Text
- * @note Holds a weak_ptr to the dynamic value
- * @note Use '<%>' in place where the value would go
-*/
-template<typename T>
-struct DynamicText : public Text {
-	std::weak_ptr<T> dynamicVal;	// Weak_ptr to object or value to track
-
-	DynamicText(const std::shared_ptr<T>& val) : dynamicVal(val) {}
-	DynamicText(const std::shared_ptr<T>& val, Text base) : Text(base), dynamicVal(val) {}
-	virtual std::string getVal() const {
-		if(dynamicVal.expired()){ return "NULL"; }
-		std::stringstream ss;
-		if(std::is_same<bool, T>::value)
-			ss << std::boolalpha;	// Actually print true or false
-		ss << *dynamicVal.lock();
-		return ss.str();
-	}
-};
-
-/**
- * @brief Dynamic UI Text with a modifier
- * @note Holds a function object to change its state, depending on dynamicVal
- * @note The funciton object is called automatically when using getVal()
-*/
-template<typename T>
-struct DynamicTextFunct : public DynamicText<T> {
-	std::function<Text*()> mod;	// Function object which can modify the state of the struct, depending on the dynamicVal
-
-	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
-	 const std::shared_ptr<T>& val) : DynamicText<T>(val) {
-		mod = [this, modifier]() { return modifier(*this); };
-	}
-	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
-	 const std::shared_ptr<T>& val, const Text base) : DynamicText<T>(val, base) {
-		mod = [this, modifier]() { return modifier(*this); };
-	}
-	DynamicTextFunct(const std::function<Text*(DynamicTextFunct<T>&)> modifier, 
-	 const DynamicText<T> base) : DynamicText<T>(base) {
-		mod = [this, modifier]() { return modifier(*this); };
-	}
-	std::string getVal() const override {
-		std::cout << "OVERRIDE " << this->text << "\n";
-		Text* a = mod();	// Will always run before drawing because 'getVal()' is always called
-		delete a;
-		std::cout << "END OVERRIDE " << this->text << "\n";
-		return DynamicText<T>::getVal();	// Return the dynamicVal
-	}
-};
-
-/**
  * @brief Freetype Char
  * @note 
 */
 struct FChar {
-    GLuint textureID;	// Character texture ID
-    glm::ivec2 size;	// Size of character
-    glm::ivec2 bearing;	// Offset from baseline to left/top of character
-    long int advance;	// Offset to advance to next character
+	unsigned int textureID;	// Character texture ID
+	glm::ivec2 size;		// Size of character
+	glm::ivec2 bearing;		// Offset from baseline to left/top of character
+	long int advance;		// Offset to advance to next character
 };
 
-// MORE MORE MORE
-using DynamicTextTypes = std::variant<DynamicText<bool>, DynamicText<int>, DynamicText<Uint32>, DynamicText<float>, DynamicText<std::string>, 
-			DynamicTextFunct<bool>, DynamicTextFunct<int>, DynamicTextFunct<Uint32>, DynamicTextFunct<float>, DynamicTextFunct<std::string>>;
+/**
+ * @brief UI Text
+*/
+class Text {
+	public:
+		Text(const std::string& text, const glm::vec2& pos, const glm::vec3& color, const float& scale, const bool& visible = true)
+			: text(text), pos(pos), color(color), scale(scale), visible(visible) {}
+		Text() : text(""), pos(glm::vec2(0.f, 0.f)), color(glm::vec3(1.f, 1.f, 1.f)), scale(1.f), visible(true) {}
+		virtual void draw(TextShader &shader, std::map<char, FChar>& fChars) {
+			if(!visible) return;
+
+			shader.bind();
+			shader.setColor(color);
+			shader.setPos(glm::vec3(640.f, 480.f, 0.f));
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindVertexArray(shader.getVAO());
+
+			// Draw each character
+			float x = pos.x;	// X position of the each character
+			std::string::const_iterator charIter;
+			for(charIter = text.begin(); charIter != text.end(); charIter++) {
+				if((fChars.find(*charIter)) == fChars.end()) continue;	// Character not in map
+				FChar ch = fChars.find(*charIter)->second;
+
+				float xpos = x + ch.bearing.x * scale;
+				float ypos = pos.y - (ch.size.y - ch.bearing.y) * scale;	// Account for the distance below the baseline(size.y - bearing.y) for 'g', 'p', etc.
+
+				float width = ch.size.x * scale;
+				float height = ch.size.y * scale;
+
+				// Update VBO
+				float vertices[6][4] = {
+					{ xpos, ypos + height, 0.f, 0.f },            
+					{ xpos, ypos, 0.f, 1.f },
+					{ xpos + width, ypos, 1.f, 1.f },
+
+					{ xpos, ypos + height, 0.f, 0.f },
+					{ xpos + width, ypos, 1.f, 1.f },
+					{ xpos + width, ypos + height, 1.f, 0.f }           
+				};
+				
+				glBindTexture(GL_TEXTURE_2D, ch.textureID);
+				glBindBuffer(GL_ARRAY_BUFFER, shader.getVBO());
+				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+				glDrawArrays(GL_TRIANGLES, 0, 6);
+
+				// Adjust next X position for the next character
+				x += (ch.advance >> 6) * scale; // Bitshift by 6 to get value in pixels
+			}
+			glBindVertexArray(0);
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+		virtual ~Text() = default;
+		
+		std::string text;
+		glm::vec2 pos;
+		glm::vec3 color;
+		float scale;
+		bool visible;
+};
+
+/**
+ * @brief Dynamic UI Text
+ * @note Holds a weak_ptr to a dynamic value
+ * @note If desired, use "<%>" in place where the value sould go in the text
+*/
+class DynamicText : public Text {
+	using ValueVariant = std::variant<std::shared_ptr<int>, std::shared_ptr<bool>, std::shared_ptr<float>, std::shared_ptr<std::string>>;
+
+	public:
+		template <typename T>
+		DynamicText(const std::string& text, const glm::vec2& pos, const glm::vec3& color, const float& scale, const bool& visible,
+			std::shared_ptr<T> dynamicVal, std::function<void(DynamicText&)> mutator)
+			: Text(text, pos, color, scale, visible), dynamicVal(dynamicVal), mutator(mutator) {}
+		template <typename T>
+		DynamicText(Text text, std::shared_ptr<T> dynamicVal, std::function<void(DynamicText&)> mutator)
+			: Text(text), dynamicVal(dynamicVal), mutator(mutator) {}
+		void draw(TextShader &shader, std::map<char, FChar>& fChars) override {
+			if(mutator)
+				mutator(*this);
+			
+			std::ostringstream oss;
+			auto a = std::static_pointer_cast<ValueVariant>(dynamicVal.lock());
+			std::visit(
+				[&oss](auto& valuePtr) {
+					if(valuePtr.get()){
+						oss << valuePtr;
+					}
+				}, 
+				(*a)
+			);
+
+			// Replace text with dynamic value
+			size_t start_pos = text.find("<%>");
+			if(start_pos != std::string::npos)
+				text.replace(start_pos, size_t(3), oss.str());
+				
+			Text::draw(shader, fChars);
+		}
+
+		std::weak_ptr<void> dynamicVal;
+		//ValueVariant dynamicVal;
+		std::function<void(DynamicText&)> mutator;
+};
 
 class UI {
 	public:
@@ -177,126 +211,22 @@ class UI {
 			return true;
 		}
 		/**
-		 * @brief Add a Text struct to the Text vector
+		 * @brief Add a Text element struct to the UI
 		*/
-		void addTextElement(const Text element) {
-			std::string::const_iterator charIter;
-			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
-				if((fChars.find(*charIter)) == fChars.end()){
-					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
-					/* I have no idea if this would work:
-					 * std::cerr << "Character \"" << *charIter << "\" not found. Using \"-\"" << std::endl;
-					 * element.text.replace(charIter, 1, '-');*/
-				}
-			}
-			textElements.push_back(std::make_unique<Text>(element));
-		}
-		/**
-		 * @brief Add a DynamicText struct to the DynamicText vector
-		*/
-		template<typename T>
-		void addTextElement(const DynamicText<T> element) {
-			std::string::const_iterator charIter;
-			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
-				if((fChars.find(*charIter)) == fChars.end()){
-					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
-				}
-			}
-			dynamicTextElements.push_back(std::make_unique<DynamicTextTypes>(element));
-		}
-		/**
-		 * @brief Add a DynamicTextFunct struct to the DynamicText vector
-		*/
-		template<typename T>
-		void addTextElement(const DynamicTextFunct<T> element) {
-			std::string::const_iterator charIter;
-			for(charIter = element.text.begin(); charIter != element.text.end(); charIter++){
-				if((fChars.find(*charIter)) == fChars.end()){
-					std::cerr << "Character \"" << *charIter << "\" not found, skipping" << std::endl;
-				}
-			}
-			dynamicTextElements.push_back(std::make_unique<DynamicTextTypes>(element));
+		void addTextElement(std::unique_ptr<Text> element) {
+			elements.push_back(std::move(element));
 		}
 		/**
 		 * @brief Draw text elements on the screen
 		*/
 		void drawTextElements(TextShader& shader) {
 			// Regular text elements
-			for(const auto& element : textElements) {
-				if(element.get()->visible)
-					renderText(shader, *element);
-			}
-
-			// Dynamic text elements
-			for(const auto& element : dynamicTextElements) {
-				Text out;
-				auto temp = element.get();
-				
-				// Struct vals
-				std::string val;
-
-				std::visit([&val](const auto& value) { val = value.getVal(); }, *temp);	// Get the dynamic value as a string
-				std::visit([&out](const auto& arg) { out = static_cast<Text>(arg); }, *temp);	// Get the base
-				if(!out.visible) std::cout<<"A\n";	// Skip if not visible
-
-				// Replace text with dynamic value
-				size_t start_pos = out.text.find("<%>");
-				if(start_pos != std::string::npos)
-					out.text.replace(start_pos, size_t(3), val);
-				renderText(shader, out);
+			for(const auto& element : elements) {
+				element->draw(shader, fChars);
 			}
 		}
-
-		/**
-		 * @brief Draws arbitrary text on the screen
-		*/
-		void renderText(TextShader &shader, Text &text) {
-			shader.bind();
-			shader.setColor(text.color);
-			shader.setPos(glm::vec3(640.f, 480.f, 0.f));
-
-			glActiveTexture(GL_TEXTURE0);
-			glBindVertexArray(shader.getVAO());
-
-			// Draw each character
-			float x = text.pos.x;	// X position of the next character
-			std::string::const_iterator charIter;
-			for(charIter = text.text.begin(); charIter != text.text.end(); charIter++) {
-				if((fChars.find(*charIter)) == fChars.end()) continue;	// Character not in map
-				FChar ch = fChars.find(*charIter)->second;
-
-				float xpos = x + ch.bearing.x * text.scale;
-				float ypos = text.pos.y - (ch.size.y - ch.bearing.y) * text.scale;	// Account for the distance below the baseline(size.y - bearing.y) for 'g', 'p', etc.
-
-				float width = ch.size.x * text.scale;
-				float height = ch.size.y * text.scale;
-
-				// Update VBO
-				float vertices[6][4] = {
-					{ xpos, ypos + height, 0.f, 0.f },            
-					{ xpos, ypos, 0.f, 1.f },
-					{ xpos + width, ypos, 1.f, 1.f },
-
-					{ xpos, ypos + height, 0.f, 0.f },
-					{ xpos + width, ypos, 1.f, 1.f },
-					{ xpos + width, ypos + height, 1.f, 0.f }           
-				};
-				
-				glBindTexture(GL_TEXTURE_2D, ch.textureID);
-				glBindBuffer(GL_ARRAY_BUFFER, shader.getVBO());
-				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-				glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-				glDrawArrays(GL_TRIANGLES, 0, 6);
-
-				// Adjust next X position for the next character
-				x += (ch.advance >> 6) * text.scale; // Bitshift by 6 to get value in pixels
-			}
-			glBindVertexArray(0);
-			glBindTexture(GL_TEXTURE_2D, 0);
-		}
-	private:
+		
+		// TODO Let text elements load different fonts, the maps would then be stored in a static map with ids pointing to each sub-map/font
 		std::map<char, FChar> fChars;
-		std::vector<std::unique_ptr<Text>> textElements;
-		std::vector<std::unique_ptr<DynamicTextTypes>> dynamicTextElements;
+		std::vector<std::unique_ptr<Text>> elements;
 };
