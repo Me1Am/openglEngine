@@ -96,7 +96,7 @@ class Text {
  * @note If desired, use "<%>" in place where the value sould go in the text
 */
 class DynamicText : public Text {
-	using ValueVariant = std::variant<std::shared_ptr<int>, std::shared_ptr<bool>, std::shared_ptr<float>, std::shared_ptr<std::string>>;
+	using ValueVariant = std::variant<std::shared_ptr<int>, std::shared_ptr<bool>, std::shared_ptr<float>, std::shared_ptr<std::string>, std::shared_ptr<void>>;
 
 	public:
 		template <typename T>
@@ -110,25 +110,32 @@ class DynamicText : public Text {
 			if(mutator)
 				mutator(*this);
 			
-			std::ostringstream oss;
-			auto a = std::static_pointer_cast<ValueVariant>(dynamicVal.lock());
-			std::visit(
-				[&oss](auto& valuePtr) {
-					if(valuePtr.get()){
-						oss << valuePtr;
-					}
-				}, 
-				(*a)
-			);
+			if(!this->visible) return;
 
+			// TODO find a better way
+			std::ostringstream oss;
+			if(auto a = std::static_pointer_cast<int>(dynamicVal.lock()))
+				oss << *a;
+			else if(auto a = std::static_pointer_cast<float>(dynamicVal.lock()))
+				oss << *a;
+			else if(auto a = std::static_pointer_cast<bool>(dynamicVal.lock()))
+				oss << *a;
+			else if(auto a = std::static_pointer_cast<std::string>(dynamicVal.lock()))
+				oss << *a;
+			else
+				Text::draw(shader, fChars);
+			
 			// Replace text with dynamic value
+			std::string backup = text;
 			size_t start_pos = text.find("<%>");
 			if(start_pos != std::string::npos)
 				text.replace(start_pos, size_t(3), oss.str());
-				
+
 			Text::draw(shader, fChars);
+			text = backup;	// Restore the special character
 		}
 
+		uint32_t index;
 		std::weak_ptr<void> dynamicVal;
 		//ValueVariant dynamicVal;
 		std::function<void(DynamicText&)> mutator;

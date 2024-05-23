@@ -160,7 +160,11 @@ class Window {
 			
 			ui = new UI();
 			ui->addTextElement(std::make_unique<Text>(Text("help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f, true)));
-			ui->addTextElement(std::make_unique<DynamicText>(Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), delta_t, [](DynamicText& e){ }));
+			ui->addTextElement(std::make_unique<DynamicText>(
+				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
+				delta_t, 
+				[](DynamicText& e){ }
+			));
 			ui->addTextElement(std::make_unique<DynamicText>(
 				Text("Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f, true), 
 				pause, 
