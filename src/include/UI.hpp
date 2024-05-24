@@ -253,13 +253,13 @@ class UI {
 		*/
 		bool addTextElement(std::unique_ptr<Text> element, std::string font = "Arial") {
 			// Get font
-			auto temp = fonts.find(font);
-			if(temp != fonts.end()){
+			auto temp = UI::fonts.find(font);
+			if(temp != UI::fonts.end()){
 				element.get()->font = temp->second;
 			} else {
 				std::cerr << "UI::addTextElement(): Unable to load font, \"" << font << "\", loading arial" << std::endl;
-				temp = fonts.find("Arial");
-				if(temp != fonts.end()){
+				temp = UI::fonts.find("Arial");
+				if(temp != UI::fonts.end()){
 					element.get()->font = temp->second;
 				} else {
 					std::cerr << "UI::addTextElement(): Unable to load arial font" << std::endl;
@@ -282,5 +282,7 @@ class UI {
 		
 	private:
 		std::vector<std::unique_ptr<Text>> elements;
-		std::map<std::string, std::shared_ptr<Font>> fonts;
+		static std::map<std::string, std::shared_ptr<Font>> fonts;
 };
+
+std::map<std::string, std::shared_ptr<Font>> UI::fonts;
