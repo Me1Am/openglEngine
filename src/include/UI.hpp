@@ -27,6 +27,16 @@ struct FChar {
 };
 
 /**
+ * @brief Holds a character map
+*/
+struct Font {
+	std::map<char, FChar> charMap;
+
+	Font() {}
+	Font(std::map<char, FChar> fChars) : charMap(fChars) {}
+};
+
+/**
  * @brief UI Text
 */
 class Text {
@@ -34,8 +44,10 @@ class Text {
 		Text(const std::string& text, const glm::vec2& pos, const glm::vec3& color, const float& scale, const bool& visible = true)
 			: text(text), pos(pos), color(color), scale(scale), visible(visible) {}
 		Text() : text(""), pos(glm::vec2(0.f, 0.f)), color(glm::vec3(1.f, 1.f, 1.f)), scale(1.f), visible(true) {}
-		virtual void draw(TextShader &shader, std::map<char, FChar>& fChars) {
-			if(!visible) return;
+		virtual void draw(TextShader &shader) {
+			if(!visible || font.expired()) return;
+
+			auto fChars = font.lock().get()->charMap;
 
 			shader.bind();
 			shader.setColor(color);
@@ -88,6 +100,8 @@ class Text {
 		glm::vec3 color;
 		float scale;
 		bool visible;
+
+		std::weak_ptr<Font> font;
 };
 
 /**
@@ -106,7 +120,7 @@ class DynamicText : public Text {
 		template <typename T>
 		DynamicText(Text text, std::shared_ptr<T> dynamicVal, std::function<void(DynamicText&)> mutator)
 			: Text(text), dynamicVal(dynamicVal), mutator(mutator) {}
-		void draw(TextShader &shader, std::map<char, FChar>& fChars) override {
+		void draw(TextShader &shader) override {
 			if(mutator)
 				mutator(*this);
 			
@@ -123,7 +137,7 @@ class DynamicText : public Text {
 			else if(auto a = std::static_pointer_cast<std::string>(dynamicVal.lock()))
 				oss << *a;
 			else
-				Text::draw(shader, fChars);
+				Text::draw(shader);
 			
 			// Replace text with dynamic value
 			std::string backup = text;
@@ -131,13 +145,12 @@ class DynamicText : public Text {
 			if(start_pos != std::string::npos)
 				text.replace(start_pos, size_t(3), oss.str());
 
-			Text::draw(shader, fChars);
+			Text::draw(shader);
 			text = backup;	// Restore the special character
 		}
 
 		uint32_t index;
 		std::weak_ptr<void> dynamicVal;
-		//ValueVariant dynamicVal;
 		std::function<void(DynamicText&)> mutator;
 };
 
@@ -145,13 +158,10 @@ class UI {
 	public:
 		UI() {
 			#ifdef WIN32
-				loadFChars(128, "c:\\Windows\\Fonts\\arial.ttf");
+				loadFChars(128, "c:\\Windows\\Fonts\\Arial.ttf");
 			#else
 				loadFChars(128, "/home/main/.local/share/fonts/common-web/Arial.TTF");
 			#endif
-		}
-		UI(std::string font) {
-			loadFChars(128, font);
 		}
 		~UI() {}
 		/**
@@ -174,6 +184,7 @@ class UI {
 			FT_Set_Pixel_Sizes(face, 0, 48);	// Set height and width of characters
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Disable byte-alignment
 
+			std::map<char, FChar> fChars;
 			for(unsigned char c = 0; c < numChars; c++) {
 				if(FT_Load_Char(face, c, FT_LOAD_RENDER)){
 					std::cerr << "UI::loadFChars(): Unable to load character #" << c << std::endl;
@@ -209,6 +220,26 @@ class UI {
 				fChars.insert(std::pair<char, FChar>(c, character));
 			}
 
+			std::string fontName;
+			size_t index = font.find_last_of('.');
+			if(index != std::string::npos)
+				fontName = font.substr(0, index);
+			
+			#ifdef WIN32
+				index = fontName.find_last_of('\\');
+			#else
+				index = fontName.find_last_of('/');
+			#endif
+
+			if(index != std::string::npos)
+				fontName = fontName.substr(index+1);
+			// Add font to list
+			fonts.insert(
+				std::pair<std::string, std::shared_ptr<Font>>(
+					fontName, 
+					std::make_unique<Font>(Font(fChars))
+			));
+
 			// Free
 			FT_Done_Face(face);
 			FT_Done_FreeType(ft);
@@ -220,8 +251,24 @@ class UI {
 		/**
 		 * @brief Add a Text element struct to the UI
 		*/
-		void addTextElement(std::unique_ptr<Text> element) {
+		bool addTextElement(std::unique_ptr<Text> element, std::string font = "Arial") {
+			// Get font
+			auto temp = fonts.find(font);
+			if(temp != fonts.end()){
+				element.get()->font = temp->second;
+			} else {
+				std::cerr << "UI::addTextElement(): Unable to load font, \"" << font << "\", loading arial" << std::endl;
+				temp = fonts.find("Arial");
+				if(temp != fonts.end()){
+					element.get()->font = temp->second;
+				} else {
+					std::cerr << "UI::addTextElement(): Unable to load arial font" << std::endl;
+					return false;
+				}
+			}
+
 			elements.push_back(std::move(element));
+			return true;
 		}
 		/**
 		 * @brief Draw text elements on the screen
@@ -229,11 +276,11 @@ class UI {
 		void drawTextElements(TextShader& shader) {
 			// Regular text elements
 			for(const auto& element : elements) {
-				element->draw(shader, fChars);
+				element->draw(shader);
 			}
 		}
 		
-		// TODO Let text elements load different fonts, the maps would then be stored in a static map with ids pointing to each sub-map/font
-		std::map<char, FChar> fChars;
+	private:
 		std::vector<std::unique_ptr<Text>> elements;
+		std::map<std::string, std::shared_ptr<Font>> fonts;
 };
