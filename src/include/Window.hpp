@@ -11,6 +11,7 @@
 #include <string>
 #include <cmath>
 
+#include "PhysicsEngine.hpp"
 #include "ObjectHandler.hpp"
 #include "shader/BaseShader.hpp"
 #include "Camera.hpp"
@@ -128,6 +129,13 @@ class Window {
 				return false;
 			}
 			
+			// Initialize physics engine
+			physicsEngine = new PhysicsEngine();
+			if(!physicsEngine->init()){
+				std::cout << "Unable to initialize physics engine" << std::endl;
+				return false;
+			}
+
 			keyboard = SDL_GetKeyboardState(NULL);	// Get pointer to internal keyboard state
 
 			paused = true;
@@ -297,6 +305,7 @@ class Window {
 		/// Run Logic
 		void tick() {
 			// Constant Logic
+			physicsEngine->tick((*delta_t) / 1000.f);
 			
 			// Runtime Logic
 			if(paused){	// Paused Logic
@@ -327,7 +336,6 @@ class Window {
 				camera.updateCameraDirection();
 			}
 		}
-		
 		/// Render
 		void render() {
 			glClearColor(0.02f, 0.02f, 0.02f, 0.f);	// Set clear color
@@ -370,11 +378,12 @@ class Window {
 		const float SENSITIVITY;	// Mouse sensitivity
 		const float MIN_FRAME_TIME;	// Minimum frame time in ms
 
+		// Components
+		PhysicsEngine* physicsEngine;
+		UI* ui;
+		Camera camera;
 
-		// Objects
+		// Shaders
 		BaseShader baseShader;
 		TextShader textShader;
-		Camera camera;
-		UI* ui;
-		short uid;
 };

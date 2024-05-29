@@ -1,81 +1,123 @@
 #pragma once
 
-#include <glm/vec3.hpp>
+#include <bullet/btBulletDynamicsCommon.h>
 
 #include <iostream>
-
-#include <cmath>
-#include <vector>
-#include <tuple>
-
-#include "Car.hpp"
-
-#define SIGN(x) (((x) >= 0) ? 1 : -1)
-#define MAGNITUDE3(v) (std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z))
-#define IS_NAN_VEC3(v) (std::isnan(v.x) || std::isnan(v.y) || std::isnan(v.y))
-#define IS_INF_VEC3(v) (std::isinf(v.x) || std::isinf(v.y) || std::isinf(v.y))
-#define IS_INVALID(x) (std::isnan(x) || std::isinf(x))
-#define IS_INVALID_VEC3(v) (IS_INVALID(v.x) || IS_INVALID(v.y) || IS_INVALID(v.z))
-#define UNSIGN_ZERO(x) ((x != 0) ? x : abs(x))	// Prevents negative zeros, returns input if its not zero
-#define UNSIGN_ZERO_VEC3(v) { \
-	v.x = UNSIGN_ZERO(v.x); \
-	v.y = UNSIGN_ZERO(v.y); \
-	v.z = UNSIGN_ZERO(v.z); }
+#include <cstdio>
+#include <fstream>
 
 class PhysicsEngine {
 	public:
-		PhysicsEngine();
-		~PhysicsEngine();
+		PhysicsEngine() {}
 		/**
-		 * @brief Checks and removes nan or inf values
-		 * @param vec Reference to the vec3 to be checked
-		 * @param defVals The vec3 holding the values to set the invalid members to
+		 * @brief Deletes everything in reverse order from which they were instantiated
 		*/
-		static void fixVec3(glm::vec3 &vec, const glm::vec3 &defVals) {
-			if(IS_INVALID(vec.x))
-				vec.x = defVals.x;
-			if(IS_INVALID(vec.y))
-				vec.y = defVals.y;
-			if(IS_INVALID(vec.z))
-				vec.z = defVals.z;
+		~PhysicsEngine() {
+			// Remove rigidbodies from the dynamics world
+			for(int i = dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--) {
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+				btRigidBody* body = btRigidBody::upcast(obj);
+				
+				if(body && body->getMotionState())
+					delete body->getMotionState();
+				dynamicsWorld->removeCollisionObject(obj);
+				delete obj;
+			}
+
+			// Delete collision shapes
+			for(int i = 0; i < objArray.size(); i++) {
+				btCollisionShape* shape = objArray[i];
+				objArray[i] = 0;
+				delete shape;
+			}
+
+			delete dynamicsWorld;
+			delete solver;
+			delete interface;
+			delete dispatcher;
+			delete collisionConfig;
+
+			objArray.clear();
 		}
-		/**
-		 * @brief Converts and axis-angle pair to a quaternion
-		 * @param axis The unit vector
-		 * @param angle The angle in radians
-		 * @return A quaternion equal to the axis-angle
-		 * @note The axis must be normalized before calling
-		*/
-		static glm::quat axisAngleToQuaternion(const glm::vec3 axis, const float angle) {
-			return glm::quat( 
-				cos(angle / 2), 
-				axis.x * sin(angle / 2), 
-				axis.y * sin(angle / 2), 
-				axis.z * sin(angle / 2)
-			);
+		bool init() {
+			collisionConfig = new btDefaultCollisionConfiguration();
+			dispatcher = new btCollisionDispatcher(collisionConfig);
+			interface = new btDbvtBroadphase();
+			solver = new btSequentialImpulseConstraintSolver();
+			dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, interface, solver, collisionConfig);
+
+			dynamicsWorld->setGravity(btVector3(0.f, -10.f, 0.f));
+
+			///---< Demo Objects >---///
+			{	// Static ground, a cube of size 100 at (0, -56)
+				btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(50.f), btScalar(50.f), btScalar(50.f)));
+				objArray.push_back(groundShape);
+
+				btTransform groundTransform;
+				groundTransform.setIdentity();
+				groundTransform.setOrigin(btVector3(0.f, -56.f, 0.f));
+				
+				btScalar mass(0.f);
+				btVector3 localInertia(0.f, 0.f, 0.f);
+
+				// Motionstate is optional, but it provides interpolation capabilities and only synchronizes 'active' objects
+				btDefaultMotionState* myMotionState = new btDefaultMotionState(groundTransform);
+				btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, groundShape, localInertia);
+				btRigidBody* body = new btRigidBody(rbInfo);
+
+				dynamicsWorld->addRigidBody(body);
+			}
+			{	// Dynamic sphere, will hit ground object at y = -6
+				btCollisionShape* colShape = new btSphereShape(btScalar(1.f));
+				objArray.push_back(colShape);
+
+				/// Create Dynamic Objects
+				btTransform startTransform;
+				startTransform.setIdentity();
+				startTransform.setOrigin(btVector3(2.f, 10.f, 0.f));
+
+				btScalar mass(1.f);
+				btVector3 localInertia(0.f, 0.f, 0.f);
+				if(mass != 0.f) colShape->calculateLocalInertia(mass, localInertia);
+
+				// Motionstate is recommended
+				btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
+				btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, colShape, localInertia);
+				btRigidBody* body = new btRigidBody(rbInfo);
+
+				dynamicsWorld->addRigidBody(body);
+			}
+
+			return true;
 		}
-		/**
-		 * @brief Converts and axis-angle pair to a quaternion
-		 * @param axis The unit vector
-		 * @param angle The angle in radians
-		 * @return A tuple with the axis and angle, respectively
-		 * @note The axis must be normalized before calling
-		*/
-		static std::tuple<glm::vec3, float> quaternionToAxisAngle(const glm::quat quaternion) {
-			return {
-				glm::vec3(
-					(quaternion.w == 1) ? 0 : quaternion.x / sqrt(1 - quaternion.w*quaternion.w), 
-					(quaternion.w == 1) ? 1 : quaternion.y / sqrt(1 - quaternion.w*quaternion.w), 
-					(quaternion.w == 1) ? 0 : quaternion.z / sqrt(1 - quaternion.w*quaternion.w)
-				), 
-				2 * acos(quaternion.w)
-			};
+		void tick(float delta_t) {
+			dynamicsWorld->stepSimulation(delta_t, 10);
+
+			// Print all positions
+			for(int i = dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--) {
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+				btRigidBody* body = btRigidBody::upcast(obj);
+				btTransform transform;
+
+				if(body && body->getMotionState()){
+					body->getMotionState()->getWorldTransform(transform);
+				} else {
+					transform = obj->getWorldTransform();
+				}
+				std::cout 
+					<< "Object " << i << " at "
+					<< transform.getOrigin().getX() << ", "
+					<< transform.getOrigin().getY() << ", "
+					<< transform.getOrigin().getZ()
+				<< '\n';
+			}
 		}
-		static glm::quat deltaRotation(const glm::vec3 angVelocity, const float deltaTime) {
-			glm::vec3 halfAngle = angVelocity * (deltaTime * 0.5f);
-			float magnitude = MAGNITUDE3(halfAngle);
-			if(magnitude > 0)
-				halfAngle *= sin(magnitude) / magnitude;
-			return glm::quat(cos(magnitude), halfAngle.x, halfAngle.y, halfAngle.z);
-		}
+	private:
+		btDefaultCollisionConfiguration* collisionConfig;	// Default memory and collision setup
+		btCollisionDispatcher* dispatcher;					// Collision handler
+		btBroadphaseInterface* interface;					// AABB collision detection interface
+		btSequentialImpulseConstraintSolver* solver;		// Constraint solver
+		btDiscreteDynamicsWorld* dynamicsWorld;				// Dynamics world
+		btAlignedObjectArray<btCollisionShape*> objArray;	// Collision object array
+
 };
