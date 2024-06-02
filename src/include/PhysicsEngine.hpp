@@ -49,8 +49,8 @@ class PhysicsEngine {
 			dynamicsWorld->setGravity(btVector3(0.f, -10.f, 0.f));
 
 			///---< Demo Objects >---///
-			{	// Static ground, a cube of size 100 at (0, -56)
-				btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(50.f), btScalar(50.f), btScalar(50.f)));
+			{	// Static ground, a 50x50x50 cube at (0, -56)
+				btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(50.f), btScalar(0.1f), btScalar(50.f)));
 				objArray.push_back(groundShape);
 
 				btTransform groundTransform;
@@ -67,7 +67,7 @@ class PhysicsEngine {
 
 				dynamicsWorld->addRigidBody(body);
 			}
-			{	// Dynamic sphere, will hit ground object at y = -6
+			{	// Dynamic sphere, will hit ground object at y = -56
 				btCollisionShape* colShape = new btSphereShape(btScalar(1.f));
 				objArray.push_back(colShape);
 
