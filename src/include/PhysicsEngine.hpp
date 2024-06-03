@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <fstream>
 
+#include "Collision.h"
+
 class PhysicsEngine {
 	public:
 		PhysicsEngine() {}
@@ -49,43 +51,26 @@ class PhysicsEngine {
 			dynamicsWorld->setGravity(btVector3(0.f, -10.f, 0.f));
 
 			///---< Demo Objects >---///
-			{	// Static ground, a 50x50x50 cube at (0, -56)
-				btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(50.f), btScalar(0.1f), btScalar(50.f)));
-				objArray.push_back(groundShape);
+			{	// Static ground, a 100x100x100 cube at (0, -56)
+				btCollisionShape* shape = new btBoxShape(btVector3(btScalar(50.f), btScalar(50.f), btScalar(50.f)));
+				objArray.push_back(shape);
 
-				btTransform groundTransform;
-				groundTransform.setIdentity();
-				groundTransform.setOrigin(btVector3(0.f, -56.f, 0.f));
+				btTransform transform;
+				transform.setIdentity();
+				transform.setOrigin(btVector3(0.f, -56.f, 0.f));
 				
-				btScalar mass(0.f);
-				btVector3 localInertia(0.f, 0.f, 0.f);
-
-				// Motionstate is optional, but it provides interpolation capabilities and only synchronizes 'active' objects
-				btDefaultMotionState* myMotionState = new btDefaultMotionState(groundTransform);
-				btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, groundShape, localInertia);
-				btRigidBody* body = new btRigidBody(rbInfo);
-
-				dynamicsWorld->addRigidBody(body);
+				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 0.f));
 			}
 			{	// Dynamic sphere, will hit ground object at y = -56
-				btCollisionShape* colShape = new btSphereShape(btScalar(1.f));
-				objArray.push_back(colShape);
+				btCollisionShape* shape = new btSphereShape(btScalar(1.f));
+				objArray.push_back(shape);
 
 				/// Create Dynamic Objects
-				btTransform startTransform;
-				startTransform.setIdentity();
-				startTransform.setOrigin(btVector3(2.f, 10.f, 0.f));
+				btTransform transform;
+				transform.setIdentity();
+				transform.setOrigin(btVector3(2.f, 10.f, 0.f));
 
-				btScalar mass(1.f);
-				btVector3 localInertia(0.f, 0.f, 0.f);
-				if(mass != 0.f) colShape->calculateLocalInertia(mass, localInertia);
-
-				// Motionstate is recommended
-				btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
-				btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, colShape, localInertia);
-				btRigidBody* body = new btRigidBody(rbInfo);
-
-				dynamicsWorld->addRigidBody(body);
+				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 1.f));
 			}
 
 			return true;

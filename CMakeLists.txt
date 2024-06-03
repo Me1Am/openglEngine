@@ -11,6 +11,8 @@ project(openglEngine VERSION 1.0)
 
 set(SOURCES 
 	"src/main.cpp"
+	"src/Collision.cpp"
+
 	"src/include/Window.hpp"
 	"src/include/UI.hpp"
 	"src/include/Mesh.hpp"
@@ -18,6 +20,7 @@ set(SOURCES
 	"src/include/PhysicsEngine.hpp"
 	"src/include/ObjectHandler.hpp"
 	"src/include/FileHandler.hpp"
+	"src/include/Collision.h"
 	"src/include/GameObject.hpp"
 	"src/include/StaticBody.hpp"
 	"src/include/shader/BaseShader.hpp"
