@@ -8,9 +8,25 @@
  * @brief Collider struct, holds a rigidbody pointer and tag
 */
 struct Collider {
-	btRigidBody* rigidBody;
+	btCollisionShape* collider;
+	Mesh* mesh;	// Mesh for debug drawing
 
 	short tag;	// Can be used to determine the type of objects colliding
+
+	~Collider() {
+		delete collider;
+		delete mesh;
+	}
+};
+
+/**
+ * @brief Rigidbody struct, holds a rigidbody pointer and Collider struct
+*/
+struct PhysicsBody {
+	btRigidBody* rigidBody;
+	Collider collider;
+
+	~PhysicsBody() { delete rigidBody; }
 };
 
 /**
@@ -40,3 +56,9 @@ btCollisionShape* createCollisionShapeCompound(std::vector<btCollisionShape*> sh
  * @param mass The mass of the rigidbody
 */
 btRigidBody* createRigidBody(btCollisionShape* shape, btTransform transform, btScalar mass, btVector3 moveAxises = btVector3(btScalar(1.f), btScalar(1.f), btScalar(1.f)));
+
+/**
+ * @brief Draw a Collider struct's mesh as a wireframe
+ * @param collider The Collider struct to draw
+*/
+void drawCollider(const Collider* collider);

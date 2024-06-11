@@ -85,6 +85,18 @@ class Mesh {
 			glDrawElements(GL_TRIANGLES, static_cast<GLuint>(indices.size()), GL_UNSIGNED_INT, 0);
 			glBindVertexArray(0);
 		}
+		const std::vector<GLuint>& getIndices() {
+			return indices;
+		}
+		GLuint getVAO() {
+			return vao;
+		}
+		GLuint getVBO() {
+			return vbo;
+		}
+		GLuint getEBO() {
+			return ebo;
+		}
 		std::string getName() {
 			return name;
 		}

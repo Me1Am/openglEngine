@@ -58,3 +58,13 @@ btRigidBody* createRigidBody(btCollisionShape* shape, btTransform transform, btS
 	
 	return rigidBody;
 }
+
+void drawCollider(const Collider* collider) {
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);	// Wireframe
+	glBindVertexArray(collider->mesh->getVAO());
+	
+	glDrawElements(GL_TRIANGLES, static_cast<GLuint>(collider->mesh->getIndices().size()), GL_UNSIGNED_INT, 0);
+	
+	glBindVertexArray(0);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
