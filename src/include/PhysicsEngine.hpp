@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bullet/btBulletDynamicsCommon.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <cstdio>
@@ -8,9 +9,14 @@
 
 #include "Collision.h"
 
+#include <GL/glew.h>
+#include <GL/glu.h>
+
 class PhysicsEngine {
 	public:
-		PhysicsEngine() {}
+		PhysicsEngine() {
+			cubeShader = new CubeShader();
+		}
 		/**
 		 * @brief Deletes everything in reverse order from which they were instantiated
 		*/
@@ -51,24 +57,26 @@ class PhysicsEngine {
 			dynamicsWorld->setGravity(btVector3(0.f, -10.f, 0.f));
 
 			///---< Demo Objects >---///
-			{	// Static ground, a 100x100x100 cube at (0, -56)
-				btCollisionShape* shape = new btBoxShape(btVector3(btScalar(50.f), btScalar(50.f), btScalar(50.f)));
+			// bullet3 dimensions are double that of opengl, ie. 1.0(bullet) -> 0.5(opengl)
+			{	// Static ground, a 10x10x10 cube at (0, 0)
+				btCollisionShape* shape = new btBoxShape(btVector3(btScalar(5.f), btScalar(5.f), btScalar(5.f)));
 				objArray.push_back(shape);
+
 
 				btTransform transform;
 				transform.setIdentity();
-				transform.setOrigin(btVector3(0.f, -56.f, 0.f));
+				transform.setOrigin(btVector3(0.f, 0.f, 0.f));
 				
 				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 0.f));
 			}
-			{	// Dynamic sphere, will hit ground object at y = -56
+			{	// Dynamic sphere
 				btCollisionShape* shape = new btSphereShape(btScalar(1.f));
 				objArray.push_back(shape);
 
 				/// Create Dynamic Objects
 				btTransform transform;
 				transform.setIdentity();
-				transform.setOrigin(btVector3(2.f, 10.f, 0.f));
+				transform.setOrigin(btVector3(0.f, 50.f, 0.f));
 
 				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 1.f));
 			}
@@ -77,10 +85,12 @@ class PhysicsEngine {
 		}
 		void tick(float delta_t) {
 			dynamicsWorld->stepSimulation(delta_t, 10);
+		}
+		void drawCollider(const glm::mat4& cameraView, const float& cameraFOV, const bool wireframe) {
+			ShapeProperties properties;
 
-			// Print all positions
-			for(int i = dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--) {
-				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+			{
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[0];
 				btRigidBody* body = btRigidBody::upcast(obj);
 				btTransform transform;
 
@@ -89,12 +99,70 @@ class PhysicsEngine {
 				} else {
 					transform = obj->getWorldTransform();
 				}
-				std::cout 
-					<< "Object " << i << " at "
-					<< transform.getOrigin().getX() << ", "
-					<< transform.getOrigin().getY() << ", "
-					<< transform.getOrigin().getZ()
-				<< '\n';
+
+				// Set shader properties
+				properties.pos = glm::vec3(
+					transform.getOrigin().getX(), 
+					transform.getOrigin().getY(), 
+					transform.getOrigin().getZ()
+				);
+				properties.angle = transform.getRotation().getAngle();
+				transform.getRotation().getEulerZYX(properties.axis.y, properties.axis.z, properties.axis.x);
+				if(properties.axis == glm::vec3(0.f)) properties.axis = glm::vec3(0.f, 1.f, 0.f);
+
+				btVector3 dimensions = ((btBoxShape*)(body->getCollisionShape()))->getHalfExtentsWithMargin();
+				properties.scale = glm::vec3(dimensions.getX(), dimensions.getY(), dimensions.getZ());
+
+				// Draw
+				if(wireframe){
+					glDisable(GL_CULL_FACE);	// Culling is flipped with wireframe
+					glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				}
+				
+				cubeShader->bind();
+				cubeShader->draw(cameraView, cameraFOV, properties);
+
+				if(wireframe){
+					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+					glEnable(GL_CULL_FACE);
+				}
+			}
+			
+			{
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[1];
+				btRigidBody* body = btRigidBody::upcast(obj);
+				btTransform transform;
+
+				if(body && body->getMotionState()){
+					body->getMotionState()->getWorldTransform(transform);
+				} else {
+					transform = obj->getWorldTransform();
+				}
+
+				// Set shader properties
+				properties = ShapeProperties();
+				properties.pos = glm::vec3(
+					transform.getOrigin().getX(), 
+					transform.getOrigin().getY(), 
+					transform.getOrigin().getZ()
+				);
+				properties.angle = transform.getRotation().getAngle();
+				transform.getRotation().getEulerZYX(properties.axis.y, properties.axis.z, properties.axis.x);
+				if(properties.axis == glm::vec3(0.f)) properties.axis = glm::vec3(0.f, 1.f, 0.f);
+
+				btScalar radius = ((btSphereShape*)(body->getCollisionShape()))->getRadius();
+				properties.scale = glm::vec3(radius, radius, radius);
+				properties.color = glm::vec3(1.f, 0.f, 0.f);
+
+				// Draw
+				glDisable(GL_CULL_FACE);	// Culling is flipped with wireframe
+				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				
+				cubeShader->bind();
+				cubeShader->draw(cameraView, cameraFOV, properties);
+
+				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				glEnable(GL_CULL_FACE);
 			}
 		}
 	private:
@@ -103,6 +171,7 @@ class PhysicsEngine {
 		btBroadphaseInterface* interface;					// AABB collision detection interface
 		btSequentialImpulseConstraintSolver* solver;		// Constraint solver
 		btDiscreteDynamicsWorld* dynamicsWorld;				// Dynamics world
-		btAlignedObjectArray<btCollisionShape*> objArray;	// Collision object array
+		btAlignedObjectArray<btCollisionShape*> objArray;	// Collision shape array
 
+		CubeShader* cubeShader;	// Shader to draw cubic colliders
 };

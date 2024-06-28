@@ -141,7 +141,7 @@ class Camera {
 			return fov;
 		}
 	private:
-		const float cameraSpeed = 0.012f;
+		const float cameraSpeed = 0.006f;
 
 		float pitch;
 		float roll;

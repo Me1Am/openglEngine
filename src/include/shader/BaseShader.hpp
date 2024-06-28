@@ -147,7 +147,7 @@ class BaseShader {
 		 * @param field The name of the variable
 		 * @param mat4 The matrix data
 		 */
-		void setMat4(const std::string &field, const glm::mat4 &mat4) {
+		void setMat4(const std::string &field, const glm::mat4 mat4) {
 			glUniformMatrix4fv(glGetUniformLocation(programID, field.c_str()), 1, GL_FALSE, glm::value_ptr(mat4));
 		}
 		/**
@@ -176,7 +176,7 @@ class BaseShader {
 		 * @param field The name of the variable
 		 * @param vec3 The 3D vector data
 		 */
-		void setVec3(const std::string &field, const glm::vec3 &vec3) {
+		void setVec3(const std::string &field, const glm::vec3 vec3) {
 			glUniform3f(glGetUniformLocation(programID, field.c_str()), vec3.x, vec3.y, vec3.z);
 		}
 		/**

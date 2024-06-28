@@ -2,7 +2,50 @@
 
 #include "include/Collision.h"
 
-btCollisionShape* createCollisionMesh(std::vector<Vertex> verticies, bool convex) {
+Collider* createMeshCollider(const std::vector<Vertex>& verticies, const bool& convex, const short& tag) {
+	Collider* collider = new Collider();
+	collider->collider = createCollisionMesh(verticies, convex);
+	collider->mesh = new Mesh(verticies, {}, {}, "collider");
+	collider->tag = tag;
+
+	return collider;
+}
+
+Collider* createShapeCollider(std::vector<btCollisionShape*> shapes, std::vector<btTransform> shapeTransforms, int count, bool dynamicAABBTree, const short& tag) {
+	Collider* collider = new Collider();
+	collider->collider = createCollisionShapeCompound(shapes, shapeTransforms, count, dynamicAABBTree);
+	
+	btCompoundShapeChild* child = ((btCompoundShape*)(collider->collider))->getChildList();
+	for(int i = 0; i < ((btCompoundShape*)(collider->collider))->getNumChildShapes(); i++) {
+		int shape = child->m_childShapeType;
+		switch(shape) {
+			case BOX_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Box" << std::endl;
+				break;
+			case SPHERE_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Sphere" << std::endl;
+				break;
+			case CAPSULE_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Capsule" << std::endl;
+				break;
+			case CONE_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Cone" << std::endl;
+				break;
+			case CYLINDER_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Cylinder" << std::endl;
+				break;
+			case STATIC_PLANE_PROXYTYPE:
+				std::cout << "Shape is a Static Plane" << std::endl;
+				break;
+			case COMPOUND_SHAPE_PROXYTYPE:
+				std::cout << "Shape is a Compound Shape" << std::endl;
+				break;
+		}
+	}
+	return collider;
+}
+
+btCollisionShape* createCollisionMesh(const std::vector<Vertex>& verticies, const bool& convex) {
 	btCollisionShape* shape;
 
 	if(convex){
@@ -32,7 +75,8 @@ btCollisionShape* createCollisionMesh(std::vector<Vertex> verticies, bool convex
 }
 
 btCollisionShape* createCollisionShapeCompound(std::vector<btCollisionShape*> shapes, std::vector<btTransform> shapeTransforms, int count, bool dynamicAABBTree) {
-	if(shapes.size() != shapeTransforms.size()) throw std::logic_error("\"shapes\" and \"shapeTransforms\" vectors are of the same not the same size");
+	if(shapes.size() != shapeTransforms.size())
+		throw std::logic_error("\"shapes\" and \"shapeTransforms\" vectors are of the same not the same size");
 	
 	btCollisionShape* shape;
 

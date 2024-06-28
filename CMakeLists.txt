@@ -25,6 +25,7 @@ set(SOURCES
 	"src/include/StaticBody.hpp"
 	"src/include/shader/BaseShader.hpp"
 	"src/include/shader/TextShader.hpp"
+	"src/include/shader/CubeShader.hpp"
 )
 
 if(WIN32)

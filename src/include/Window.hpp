@@ -56,6 +56,7 @@ class Window {
 		}
 		~Window() {
 			baseShader.freeProgram();
+			textShader.freeProgram();
 			SDL_DestroyWindow(window);		// Delete window
 
 			SDL_Quit();	// Quit SDL
@@ -165,9 +166,8 @@ class Window {
 			}
 
 			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
-			
+
 			ui = new UI();
-			ui->addTextElement(std::make_unique<Text>(Text("help me", { 320.f, 240.f }, { 1.f, 0.f, 0.f }, 1.f, true)));
 			ui->addTextElement(std::make_unique<DynamicText>(
 				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
 				delta_t, 
@@ -206,6 +206,7 @@ class Window {
 									case SDL_WINDOWEVENT_CLOSE:	// Window receives close command
 										// Destroy objects
 										baseShader.freeProgram();
+										textShader.freeProgram();
 										SDL_DestroyWindow(window);
 
 										// Push quit message
@@ -305,12 +306,12 @@ class Window {
 		/// Run Logic
 		void tick() {
 			// Constant Logic
-			physicsEngine->tick((*delta_t) / 1000.f);
 			
 			// Runtime Logic
 			if(paused){	// Paused Logic
 
-			} else {	// Runtime Logic
+			} else {
+				// Camera
 				if(keyboard[SDL_SCANCODE_E]){
 					camera.incRoll(1.5f * *delta_t / 1000);		// Roll right(increase)
 				} else if(keyboard[SDL_SCANCODE_Q]) {
@@ -334,6 +335,8 @@ class Window {
 					*delta_t
 				);
 				camera.updateCameraDirection();
+
+				physicsEngine->tick((*delta_t) / 1000.f);
 			}
 		}
 		/// Render
@@ -345,7 +348,8 @@ class Window {
 			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
-						
+			physicsEngine->drawCollider(camera.calcCameraView(), camera.getFOV(), true);
+
 			ui->drawTextElements(textShader);
 			
 			glUseProgram(0);	// Unbind

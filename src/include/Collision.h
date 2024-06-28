@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Mesh.hpp"
+#include "shader/CubeShader.hpp"
 
 /**
  * @brief Collider struct, holds a rigidbody pointer and tag
@@ -36,7 +37,7 @@ struct PhysicsBody {
  * @note If concave, the collider must be static, but is generally recommended to always be static when using this
  * @return btCollisionShape pointer
 */
-btCollisionShape* createCollisionMesh(std::vector<Vertex> verticies, bool convex);
+btCollisionShape* createCollisionMesh(const std::vector<Vertex>& verticies, const bool& convex);
 
 /**
  * @brief Create compound collision shape
