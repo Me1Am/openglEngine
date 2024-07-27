@@ -56,7 +56,7 @@ class BaseShader {
 		 * @brief Loads the shader program
 		 * @return a bool if loading worked or not 
 		*/
-		bool loadProgram(const std::string vertPath, const std::string fragPath) {
+		bool loadProgram(const std::string vertPath, const std::string fragPath, const std::string tescPath, const std::string tesePath) {
 			GLint programSuccess = GL_TRUE;	// Success flag
 			programID = glCreateProgram();	// Create program
 
@@ -78,6 +78,28 @@ class BaseShader {
 			}
 			glAttachShader(programID, fragmentShader);
 			
+			if(tescPath.compare("")){
+				GLuint tescShader;
+				try {
+					tescShader = FileHandler::compileShader(tescPath);
+				} catch(const std::logic_error& exeception) {
+					std::cerr << exeception.what() << std::endl;
+					return false;
+				}
+				glAttachShader(programID, tescShader);
+			}
+
+			if(tesePath.compare("")){
+				GLuint teseShader;
+				try {
+					teseShader = FileHandler::compileShader(tesePath);
+				} catch(const std::logic_error& exeception) {
+					std::cerr << exeception.what() << std::endl;
+					return false;
+				}
+				glAttachShader(programID, teseShader);
+			}
+
 			glLinkProgram(programID);	// Link
 			// Error check
 			glGetProgramiv(programID, GL_LINK_STATUS, &programSuccess);
@@ -106,7 +128,7 @@ class BaseShader {
 			model = glm::translate(model, pos);                     // Set position
 			model = glm::scale(model, scale);						// Set scale
 			model = glm::rotate(model, rotationRad, rotationAxis);	// Set rotation
-			projection = glm::perspective(glm::radians(fov), 640.f / 480.f, 0.1f, 100.f);
+			projection = glm::perspective(glm::radians(fov), 640.f / 480.f, 0.1f, 1000.f);
 			view = cameraView;
 
 			glUniformMatrix4fv(glGetUniformLocation(programID, "model"), 1, GL_FALSE, glm::value_ptr(model));

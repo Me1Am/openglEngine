@@ -21,6 +21,7 @@ set(SOURCES
 	"src/include/ObjectHandler.hpp"
 	"src/include/FileHandler.hpp"
 	"src/include/Collision.h"
+	"src/include/Heightmap.hpp"
 	"src/include/GameObject.hpp"
 	"src/include/StaticBody.hpp"
 	"src/include/shader/BaseShader.hpp"

@@ -110,7 +110,7 @@ class StaticBody {
 		short getUniqueID() {
 			return UNIQUE_ID;
 		}
-	private:
+	protected:
 		float scale;	// Scales the bodiy's model across each axis uniformly
 		
 		const short UNIQUE_ID;

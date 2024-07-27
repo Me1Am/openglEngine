@@ -9,6 +9,7 @@
 class Camera {
 	public:
 		Camera() {
+			speed = 0.006f;
 			pitch = 0.f;
 			roll = 0.f;
 			yaw = -90.f;
@@ -47,7 +48,7 @@ class Camera {
 		 * @param deltaTime A float representing the time since last frame in ms
 		*/
 		void updateCameraPosition(const bool forward, const bool backward, const bool left, const bool right, const bool up, const bool down, const float deltaTime) {
-			float frameSpeed = cameraSpeed * deltaTime;
+			float frameSpeed = speed * deltaTime;
 
 			if(forward)
 				cameraPos += cameraFront * frameSpeed;
@@ -119,6 +120,9 @@ class Camera {
 			if(this->fov > MAX_FOV)
 				this->fov = MAX_FOV;
 		}
+		void setSpeed(const float speed) {
+			this->speed = (speed < 0.006f) ? 0.006f : speed;
+		}
 		void setPos(const glm::vec3 pos) {
 			this->cameraPos = pos;
 		}
@@ -127,6 +131,9 @@ class Camera {
 		}
 		glm::vec3 getDir() {
 			return cameraFront;
+		}
+		float getSpeed() {
+			return speed;
 		}
 		float getPitch() {
 			return pitch;
@@ -141,8 +148,7 @@ class Camera {
 			return fov;
 		}
 	private:
-		const float cameraSpeed = 0.006f;
-
+		float speed;
 		float pitch;
 		float roll;
 		float yaw;

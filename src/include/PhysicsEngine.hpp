@@ -62,7 +62,6 @@ class PhysicsEngine {
 				btCollisionShape* shape = new btBoxShape(btVector3(btScalar(5.f), btScalar(5.f), btScalar(5.f)));
 				objArray.push_back(shape);
 
-
 				btTransform transform;
 				transform.setIdentity();
 				transform.setOrigin(btVector3(0.f, 0.f, 0.f));
@@ -163,6 +162,53 @@ class PhysicsEngine {
 
 				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 				glEnable(GL_CULL_FACE);
+			}
+		}
+		/**
+		 * @brief Resets the simulation to its starting state
+		 * @note Just recreates all objects
+		*/
+		// TODO Actually implement way to save and load state
+		void reset() {
+			// Clear
+			// Remove rigidbodies from the dynamics world
+			for(int i = dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--) {
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+				btRigidBody* body = btRigidBody::upcast(obj);
+				
+				if(body && body->getMotionState())
+					delete body->getMotionState();
+				dynamicsWorld->removeCollisionObject(obj);
+				delete obj;
+			}
+			// Delete collision shapes
+			for(int i = 0; i < objArray.size(); i++) {
+				btCollisionShape* shape = objArray[i];
+				objArray[i] = 0;
+				delete shape;
+			}
+			objArray.resize(0);
+
+			{	// Static ground, a 10x10x10 cube at (0, 0)
+				btCollisionShape* shape = new btBoxShape(btVector3(btScalar(5.f), btScalar(5.f), btScalar(5.f)));
+				objArray.push_back(shape);
+
+				btTransform transform;
+				transform.setIdentity();
+				transform.setOrigin(btVector3(0.f, 0.f, 0.f));
+				
+				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 0.f));
+			}
+			{	// Dynamic sphere
+				btCollisionShape* shape = new btSphereShape(btScalar(1.f));
+				objArray.push_back(shape);
+
+				/// Create Dynamic Objects
+				btTransform transform;
+				transform.setIdentity();
+				transform.setOrigin(btVector3(0.f, 50.f, 0.f));
+
+				dynamicsWorld->addRigidBody(createRigidBody(shape, transform, 1.f));
 			}
 		}
 	private:

@@ -16,6 +16,7 @@
 #include "shader/BaseShader.hpp"
 #include "Camera.hpp"
 #include "UI.hpp"
+#include "Heightmap.hpp"
 
 class Window {
 	public:
@@ -73,8 +74,8 @@ class Window {
 			}
 			
 			// Use OpenGL 3.1 core
-			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 			
 			// Other OpenGL settings
@@ -156,8 +157,13 @@ class Window {
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-			if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag")){
+			if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "")){
 				std::cerr << "Unable to load model shader" << std::endl;
+				return false;
+			}
+
+			if(!heightmap.loadProgram("../shaders/heightmap.vert", "../shaders/heightmap.frag", "../shaders/heightmap.tesc", "../shaders/heightmap.tese")){
+				std::cerr << "Unable to load heightmap shader" << std::endl;
 				return false;
 			}
 			if(!textShader.loadProgram("../shaders/text.vert", "../shaders/text.frag")){
@@ -165,8 +171,7 @@ class Window {
 				return false;
 			}
 
-			ObjectHandler::newGameObject<GameObject>("../assets/backpack/backpack.obj", {});
-
+			heightfield = new Heightmap("../assets/heightmap.png");
 			ui = new UI();
 			ui->addTextElement(std::make_unique<DynamicText>(
 				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
@@ -232,18 +237,21 @@ class Window {
 								
 								SDL_SetRelativeMouseMode((SDL_bool)(!paused));
 								SDL_ShowCursor((SDL_bool)(paused));
-							}
-							if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !paused){
+							// Show z-buffer
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !paused){
 								zBuffer = !zBuffer;
 								if(zBuffer){
-									if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/zBuffer.frag")){
+									if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/zBuffer.frag", "", "")){
 										std::cerr << "Unable to load z-buffer shader" << std::endl;
-										baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag");
+										baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
 										zBuffer = false;
 									}
 								} else {
-									baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag");
+									baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
 								}
+							// Reset sim
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_R) {
+								physicsEngine->reset();
 							}
 							break;
 						} case SDL_MOUSEMOTION: {
@@ -306,24 +314,23 @@ class Window {
 		/// Run Logic
 		void tick() {
 			// Constant Logic
-			
+
 			// Runtime Logic
 			if(paused){	// Paused Logic
 
 			} else {
 				// Camera
 				if(keyboard[SDL_SCANCODE_E]){
-					camera.incRoll(1.5f * *delta_t / 1000);		// Roll right(increase)
+					camera.incRoll(1.5f * (*delta_t) / 1000);	// Roll right(increase)
 				} else if(keyboard[SDL_SCANCODE_Q]) {
-					camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
+					camera.incRoll(-1.5f * (*delta_t) / 1000);	// Roll left(decrease)
 				}
-				// Roll
-				if(keyboard[SDL_SCANCODE_E]){
-					camera.incRoll(1.5f * *delta_t / 1000);		// Roll right(increase)
-				} else if(keyboard[SDL_SCANCODE_Q]) {
-					camera.incRoll(-1.5f * *delta_t / 1000);	// Roll left(decrease)
+				if(keyboard[SDL_SCANCODE_EQUALS] && camera.getSpeed() < 1.f){
+					camera.setSpeed(camera.getSpeed() + (0.00005f * (*delta_t)));
+				} else if(keyboard[SDL_SCANCODE_MINUS]){
+					camera.setSpeed(camera.getSpeed() - (0.00005f * (*delta_t)));
 				}
-
+	
 				// Camera position for view calculations
 				camera.updateCameraPosition(
 					keyboard[SDL_SCANCODE_W], 
@@ -343,11 +350,14 @@ class Window {
 		void render() {
 			glClearColor(0.02f, 0.02f, 0.02f, 0.f);	// Set clear color
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+			
 			// Draw all objects
 			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
+
+			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
+
 			physicsEngine->drawCollider(camera.calcCameraView(), camera.getFOV(), true);
 
 			ui->drawTextElements(textShader);
@@ -386,8 +396,10 @@ class Window {
 		PhysicsEngine* physicsEngine;
 		UI* ui;
 		Camera camera;
+		Heightmap* heightfield;
 
 		// Shaders
 		BaseShader baseShader;
+		BaseShader heightmap;
 		TextShader textShader;
 };

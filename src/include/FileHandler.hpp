@@ -51,15 +51,15 @@ class FileHandler {
 			// Determine shader type
 			if(path.substr(path.length()-4, 4).compare("vert") == 0){
 				shader = glCreateShader(GL_VERTEX_SHADER);
-			} else if(path.substr(path.length()-4, 4).compare("tesc") == 0) {
+			} else if(path.substr(path.length()-4, 4).compare("tesc") == 0){
 				shader = glCreateShader(GL_TESS_CONTROL_SHADER);
-			} else if(path.substr(path.length()-4, 4).compare("tese") == 0) {
+			} else if(path.substr(path.length()-4, 4).compare("tese") == 0){
 				shader = glCreateShader(GL_TESS_EVALUATION_SHADER);
-			} else if(path.substr(path.length()-4, 4).compare("geom") == 0) {
+			} else if(path.substr(path.length()-4, 4).compare("geom") == 0){
 				shader = glCreateShader(GL_GEOMETRY_SHADER);
-			} else if(path.substr(path.length()-4, 4).compare("frag") == 0) {
+			} else if(path.substr(path.length()-4, 4).compare("frag") == 0){
 				shader = glCreateShader(GL_FRAGMENT_SHADER);
-			} else if(path.substr(path.length()-4, 4).compare("comp") == 0) {
+			} else if(path.substr(path.length()-4, 4).compare("comp") == 0){
 				shader = glCreateShader(GL_COMPUTE_SHADER);
 			} else {
 				throw std::logic_error("FileHandler::compileShader(): Unknown shader file extension");
@@ -157,5 +157,19 @@ class FileHandler {
 			SOIL_free_image_data(image);
 			
 			return true;
+		}
+
+		static unsigned char* getRawImage(const std::string path, int& width, int& height, int& channels) {
+			unsigned char* image = SOIL_load_image(path.c_str(), &width, &height, &channels, SOIL_LOAD_AUTO);
+			if(!image){
+				std::cout << "FileHandler::loadImage(): Failed to load image" << std::endl;
+				return nullptr;
+			}
+			
+			return image;
+		}
+
+		static void freeImage(unsigned char* image) {
+			SOIL_free_image_data(image);
 		}
 };
