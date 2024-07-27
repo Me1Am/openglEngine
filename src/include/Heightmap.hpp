@@ -66,7 +66,7 @@ class Heightmap {
 			FileHandler::freeImage(data);
 
 
-			// Create quads
+			// Create quads, which will be subdivided in the tessellation shaders
 			res = 20;	// res^2 is the number of quads generated
 			std::vector<float> vertices;
 			for(int i = 0; i < res; i++) {
@@ -102,8 +102,8 @@ class Heightmap {
 			}
 			#ifdef DEBUG
 				std::cout 
-					<< "Loaded " << (res * res) << " quads\n" 
-					<< (4 * res * res) << " vertices will be processed\n";
+					<< "Loaded " << (4 * res * res) << " vertices\n" 
+					<< (res * res) << " patches will be processed\n";
 			#endif
 
 			glGenVertexArrays(1, &vao);
