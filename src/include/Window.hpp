@@ -181,7 +181,7 @@ class Window {
 				return false;
 			}
 
-			heightfield = new Heightmap("../assets/heightmap4.png");
+			heightfield = new Heightmap("../assets/heightmap.png");
 			physicsEngine->addRigidBody(heightfield->getRigidBody());
 
 			ui = new UI();
@@ -378,12 +378,14 @@ class Window {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
 
-			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), true);
+			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
 			
 			if(debugDraw){
 				Uint32 currentTime = SDL_GetTicks();
-				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_MAX_DEBUG_DRAW_MODE);
+				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_DrawWireframe);
 				*debugDrawTime = SDL_GetTicks() - currentTime;
+
+				if(*debugDrawTime == 0) *debugDrawTime = 1;	// Make sure it at least shows a value when drawing
 			}
 			
 			ui->drawTextElements(textShader);

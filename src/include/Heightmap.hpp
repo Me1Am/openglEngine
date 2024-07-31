@@ -1,6 +1,8 @@
+#pragma once
+
 #include <GL/glew.h>
 #include <GL/glu.h>
-#include <glm/vec3.hpp>
+#include <glm/vec2.hpp>
 
 #include <bullet/btBulletDynamicsCommon.h>
 #include <bullet/BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
@@ -9,7 +11,16 @@
 #include <vector>
 
 #include "FileHandler.hpp"
+#include "Collision.h"
 #include "shader/BaseShader.hpp"
+
+struct HeightmapDimensions {
+	int width;
+	int height;
+
+	float minHeight;
+	float maxHeight;
+};
 
 class Heightmap {
 	public:
@@ -19,14 +30,12 @@ class Heightmap {
 		Heightmap(const std::string path) {
 			pos = glm::vec3(0.f);
 
-			generateMesh(path);
+			HeightmapDimensions dimensions = generateMesh(path);
+			std::cout << dimensions.width << "x" << dimensions.height << "px [" << dimensions.minHeight << "," << dimensions.maxHeight << "]\n";
+			setupPhysics(dimensions);
 		}
-		~Heightmap() {
-			delete rigidBody;
-			delete motionState;
-			delete heightfieldShape;
-		}
-		void generateMesh(const std::string path) {
+		~Heightmap() {}
+		HeightmapDimensions generateMesh(const std::string path) {
 			int width;
 			int height;
 			int channels;
@@ -56,18 +65,26 @@ class Heightmap {
 			glGenerateMipmap(GL_TEXTURE_2D);
 
 			// Get heightdata for physics heightfield
-			std::vector<btScalar> heightData;
+			heightData.clear();
+			float minHeight = data[0]/256.f*4;
+			float maxHeight = minHeight;
 			for(int y = 0; y < height; y++) {
 				for(int x = 0; x < width; x++) {
-					heightData.push_back(((int)(data[(y * width + x) * channels])) * 64.f - 16.f);
+					float val = data[(y * width + x) * channels] / 256.f * 64.f - 16.f;
+					heightData.push_back(val);
+
+					if(val < minHeight)
+						minHeight = val;
+					else if(val > maxHeight)
+						maxHeight = val;
 				}
+				//std::cout << data[y * width]
 			}
 
 			FileHandler::freeImage(data);
 
-
 			// Create quads, which will be subdivided in the tessellation shaders
-			res = 20;	// res^2 is the number of quads generated
+			res = 16;	// res^2 is the number of quads generated
 			std::vector<float> vertices;
 			for(int i = 0; i < res; i++) {
 				for(int j = 0; j < res; j++) {
@@ -121,23 +138,37 @@ class Heightmap {
 			glPatchParameteri(GL_PATCH_VERTICES, 4);
 			glBindVertexArray(0);
 
-			// TODO Fully implement physics
+			return { width, height, minHeight, maxHeight };
+		}
+		// TODO Fully implement physics
+		void setupPhysics(const HeightmapDimensions dimensions) {
 			// Create rigidbody
 			bool flipQuadEdges = false;
 
-			heightfieldShape = new btHeightfieldTerrainShape(width, height, heightData.data(), -16.f, (64.f*256)-16.f, 1, flipQuadEdges);
-			heightfieldShape->setLocalScaling(btVector3(1, 1, 1));
+			btHeightfieldTerrainShape* heightfieldShape = new btHeightfieldTerrainShape(
+				dimensions.width, 
+				dimensions.height, 
+				heightData.data(), 
+				dimensions.minHeight, 
+				dimensions.maxHeight, 
+				1, 
+				flipQuadEdges
+			);
 
-			if(true)
-				heightfieldShape->buildAccelerator();
+			heightfieldShape->buildAccelerator();
 
 			btTransform transform;
 			transform.setIdentity();
-			transform.setOrigin(btVector3(width / 2, 0, height / 2));
+			transform.setOrigin(
+				btVector3(
+					0.f, 
+					(std::abs(dimensions.minHeight) + dimensions.maxHeight) / 2 -16, 
+					0.f
+				)
+			);
 
-			motionState = new btDefaultMotionState(transform);
-			btRigidBody::btRigidBodyConstructionInfo rbInfo(0.0f, motionState, heightfieldShape, btVector3(0, 0, 0));
-			rigidBody = new btRigidBody(rbInfo);
+			rigidBody = createRigidBody(heightfieldShape, transform, 0.f);
+			rigidBody->setCollisionFlags(rigidBody->getCollisionFlags() | btCollisionObject::CF_STATIC_OBJECT);
 		}
 		void draw(BaseShader& shader, const glm::mat4& view, const float& fov, const bool wireframe) {
 			shader.bind();
@@ -165,7 +196,7 @@ class Heightmap {
 		void setPos(const glm::vec3 pos) {
 			this->pos = pos;
 		}
-		btRigidBody* getRigidBody() const {
+		btRigidBody* getRigidBody() {
 			return rigidBody;
 		}
 	private:
@@ -176,7 +207,6 @@ class Heightmap {
 		GLuint vbo;
 		GLuint texture;
 
-		btHeightfieldTerrainShape* heightfieldShape;
-		btDefaultMotionState* motionState;
+		std::vector<btScalar> heightData;
 		btRigidBody* rigidBody;
 };
