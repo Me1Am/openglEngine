@@ -17,6 +17,7 @@ set(SOURCES
 	"src/include/UI.hpp"
 	"src/include/Mesh.hpp"
 	"src/include/Model.hpp"
+	"src/include/PhysicsDrawer.hpp"
 	"src/include/PhysicsEngine.hpp"
 	"src/include/ObjectHandler.hpp"
 	"src/include/FileHandler.hpp"

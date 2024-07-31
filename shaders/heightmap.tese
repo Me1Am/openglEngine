@@ -1,6 +1,6 @@
 #version 410 core
 
-layout (quads, fractional_odd_spacing, cw) in;
+layout (quads, equal_spacing, cw) in;
 
 in vec2 TextureCoord[];
 
@@ -27,7 +27,7 @@ void main() {
 	vec2 texCoord = (t1 - t0) * v + t0;
 
 	// Lookup texel at quad coordinate for height(from texture) and scale + shift
-	Height = texture(heightmap, texCoord).y * 64.0 - 16.0;
+	Height = texture(heightmap, texCoord).y * 64.f - 16.f;
 
 	// Get each vertex from the quad's 3D position
 	vec4 p00 = gl_in[0].gl_Position;

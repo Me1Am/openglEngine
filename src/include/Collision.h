@@ -1,9 +1,10 @@
+#pragma once
+
 #include <bullet/btBulletDynamicsCommon.h>
 
 #include <vector>
 
 #include "Mesh.hpp"
-#include "shader/CubeShader.hpp"
 
 /**
  * @brief Collider struct, holds a rigidbody pointer and tag
@@ -57,9 +58,3 @@ btCollisionShape* createCollisionShapeCompound(std::vector<btCollisionShape*> sh
  * @param mass The mass of the rigidbody
 */
 btRigidBody* createRigidBody(btCollisionShape* shape, btTransform transform, btScalar mass, btVector3 moveAxises = btVector3(btScalar(1.f), btScalar(1.f), btScalar(1.f)));
-
-/**
- * @brief Draw a Collider struct's mesh as a wireframe
- * @param collider The Collider struct to draw
-*/
-void drawCollider(const Collider* collider);

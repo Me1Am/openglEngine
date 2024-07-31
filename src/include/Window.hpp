@@ -30,6 +30,7 @@ class Window {
 			width = 640;
 			height = 480;
 			zBuffer = false;
+			debugDraw = false;
 		}
 		/**
 		 * @brief Constructor
@@ -42,6 +43,7 @@ class Window {
 			this->width = width;
 			this->height = height;
 			zBuffer = false;
+			debugDraw = false;
 		}
 		/**
 		 * @brief Constructor
@@ -54,13 +56,20 @@ class Window {
 			: SENSITIVITY(sensitivity), MIN_FRAME_TIME(frameTime){
 			this->width = width;
 			this->height = height;
+			zBuffer = false;
+			debugDraw = false;
 		}
 		~Window() {
 			baseShader.freeProgram();
+			heightmap.freeProgram();
 			textShader.freeProgram();
 			SDL_DestroyWindow(window);		// Delete window
 
 			SDL_Quit();	// Quit SDL
+
+			delete physicsEngine;
+			delete ui;
+			delete heightfield;
 		}
 		/**
 		 * @brief Initializes subsystems and creates the window and other resources
@@ -123,18 +132,19 @@ class Window {
 
 			// Initialize shared variables
 			delta_t.reset(new Uint32(0));
+			debugDrawTime.reset(new Uint32(0));
 			pause.reset(new bool(true));
 
-			// Initialize OpenGL
-			if(!initOpenGL()){
-				std::cout << "Unable to initialize OpenGL" << std::endl;
-				return false;
-			}
-			
 			// Initialize physics engine
 			physicsEngine = new PhysicsEngine();
 			if(!physicsEngine->init()){
 				std::cout << "Unable to initialize physics engine" << std::endl;
+				return false;
+			}
+
+			// Initialize OpenGL
+			if(!initOpenGL()){
+				std::cout << "Unable to initialize OpenGL" << std::endl;
 				return false;
 			}
 
@@ -171,7 +181,9 @@ class Window {
 				return false;
 			}
 
-			heightfield = new Heightmap("../assets/heightmap.png");
+			heightfield = new Heightmap("../assets/heightmap4.png");
+			physicsEngine->addRigidBody(heightfield->getRigidBody());
+
 			ui = new UI();
 			ui->addTextElement(std::make_unique<DynamicText>(
 				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
@@ -179,7 +191,15 @@ class Window {
 				[](DynamicText& e){ }
 			));
 			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Paused", { 1.f, 15.f }, { 1.f, 0.f, 0.f }, 0.25f, true), 
+				Text("Debugtime: <%>", { 1.f, 15.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
+				debugDrawTime, 
+				[](DynamicText& e){
+					if(e.dynamicVal.expired()) return;
+					e.visible = (*std::static_pointer_cast<Uint32>(e.dynamicVal.lock())) > 0;
+				}
+			));
+			ui->addTextElement(std::make_unique<DynamicText>(
+				Text("Paused", { 1.f, 28.f }, { 1.f, 0.f, 0.f }, 0.25f, true), 
 				pause, 
 				[](DynamicText& e){
 					if(e.dynamicVal.expired()) return;
@@ -211,16 +231,13 @@ class Window {
 									case SDL_WINDOWEVENT_CLOSE:	// Window receives close command
 										// Destroy objects
 										baseShader.freeProgram();
+										heightmap.freeProgram();
 										textShader.freeProgram();
 										SDL_DestroyWindow(window);
 
 										// Push quit message
 										event.type = SDL_QUIT;
 										SDL_PushEvent(&event);
-										break;
-									case SDL_WINDOWEVENT_EXPOSED:
-										//render();	// Render
-										//SDL_GL_SwapWindow(window);	// Update
 										break;
 									case SDL_WINDOWEVENT_RESIZED:
 										resize();
@@ -252,6 +269,11 @@ class Window {
 							// Reset sim
 							} else if(event.key.keysym.scancode == SDL_SCANCODE_R) {
 								physicsEngine->reset();
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F1) {
+								debugDraw = !debugDraw;
+
+								if(!debugDraw)
+									*debugDrawTime = 0;
 							}
 							break;
 						} case SDL_MOUSEMOTION: {
@@ -317,7 +339,7 @@ class Window {
 
 			// Runtime Logic
 			if(paused){	// Paused Logic
-
+			
 			} else {
 				// Camera
 				if(keyboard[SDL_SCANCODE_E]){
@@ -356,10 +378,14 @@ class Window {
 				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
 			}
 
-			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
-
-			physicsEngine->drawCollider(camera.calcCameraView(), camera.getFOV(), true);
-
+			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), true);
+			
+			if(debugDraw){
+				Uint32 currentTime = SDL_GetTicks();
+				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_MAX_DEBUG_DRAW_MODE);
+				*debugDrawTime = SDL_GetTicks() - currentTime;
+			}
+			
 			ui->drawTextElements(textShader);
 			
 			glUseProgram(0);	// Unbind
@@ -378,10 +404,12 @@ class Window {
 		int height;			// The running drawable window width
 		Uint32 prevTime;	// The running time from init last frame was
 		bool zBuffer;
+		bool debugDraw;
 		bool paused;
 
 		// Shared variables
-		std::shared_ptr<Uint32> delta_t;	// The running time between frames
+		std::shared_ptr<Uint32> delta_t;		// The running time between frames
+		std::shared_ptr<Uint32> debugDrawTime;	// The time it takes to draw physics colliders
 		std::shared_ptr<bool> pause;
 
 		// Running Mouse Variables
