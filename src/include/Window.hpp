@@ -247,7 +247,6 @@ class Window {
 							}
 							break;
 						} case SDL_KEYDOWN: {
-							// Toggle mouse visibility and capture state with escape key
 							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
 								paused = !paused;
 								*pause = !(*pause);
@@ -274,6 +273,18 @@ class Window {
 
 								if(!debugDraw)
 									*debugDrawTime = 0;
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F5) {
+								physicsEngine->saveState("./saves/savedState.bin");
+								
+								#ifdef DEBUG
+									std::cout << "Saved physics state to file: ./saves/savedState.bin\n";
+								#endif
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F6) {
+								physicsEngine->loadState("./saves/savedState.bin");
+								
+								#ifdef DEBUG
+									std::cout << "Loaded physics state from file: ./saves/savedState.bin\n";
+								#endif
 							}
 							break;
 						} case SDL_MOUSEMOTION: {
