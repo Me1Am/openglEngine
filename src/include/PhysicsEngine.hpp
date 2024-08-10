@@ -96,6 +96,32 @@ class PhysicsEngine {
 				throw std::runtime_error("PhysicsEngine::addRigidBody(): Arguement \"rigidbody\" is null");
 			}
 		}
+		void castRay(const glm::vec3& origin, const glm::vec3& direction, const float len) {
+			btVector3 from = btVector3(origin.x, origin.y, origin.z);
+			btVector3 dir = btVector3(direction.x, direction.y, direction.z);
+			btVector3 to = from + (dir * len);
+			
+			btDynamicsWorld::ClosestRayResultCallback callback(from, to);
+
+			dynamicsWorld->rayTest(from, to, callback);
+
+			if(callback.hasHit()){
+				const btRigidBody* body = btRigidBody::upcast(callback.m_collisionObject);
+
+				if(body){
+					const btVector3 pos = body->getWorldTransform().getOrigin();
+
+					std::cout << 
+						"Hit Object at: " << 
+							pos.getX() << 
+							", " << 
+							pos.getY() << 
+							", " << 
+							pos.getZ() << 
+						'\n';
+				}
+			}
+		}
 		void tick(float delta_t) {
 			dynamicsWorld->stepSimulation(delta_t, 10);
 		}

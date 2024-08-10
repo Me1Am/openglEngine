@@ -299,14 +299,37 @@ class Window {
 							camera.incYaw(offsetX);
 							camera.incPitch(-offsetY);
 						} case SDL_MOUSEBUTTONDOWN: {
-							mouseButtonState = SDL_GetMouseState(NULL, NULL);	// Get buttons
+							int x;
+							int y;
+							mouseButtonState = SDL_GetMouseState(&x, &y);
 
 							switch(mouseButtonState) {
-								case SDL_BUTTON(1):
+								case SDL_BUTTON(1): {	// LMB - Cast ray to pointer
+									if(!paused)
+										break;
+
+									// Normalize mouse position to [-1, 1]
+									glm::vec3 rayNDS(
+										(2.f * x) / width - 1.f, 
+										1.f - (2.f * y) / height, 
+										1.f
+									);
+
+									glm::vec4 rayClip(rayNDS.x, rayNDS.y, -1.f, 1.f);
+									glm::vec4 rayEye = glm::inverse(glm::perspective(glm::radians(camera.getFOV()), (float)(width / height), 0.1f, 1000.f)) * rayClip;
+									rayEye = glm::vec4(rayEye.x, rayEye.y, -1.f, 0.f);
+
+									glm::vec3 rayWorld = glm::vec3(glm::inverse(camera.calcCameraView()) * rayEye);
+									rayWorld = glm::normalize(rayWorld);
+
+									glm::vec3 rayOrigin = glm::vec3(glm::inverse(camera.calcCameraView()) * glm::vec4(0, 0, 0, 1));
+
+									physicsEngine->castRay(rayOrigin, rayWorld, 100.f);
+									
 									break;
-								case SDL_BUTTON(2):
+								} case SDL_BUTTON(2):	// MMB
 									break;
-								case SDL_BUTTON(3):
+								case SDL_BUTTON(3):		// RMB
 									break;
 							}
 							break;
