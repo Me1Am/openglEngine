@@ -1,0 +1,10 @@
+Entity Component System
+-	Allow lambda functions in ControlComponent to modify a physics component	: File: Components.hpp:80
+-- 	Move functionality from PhysicsEngine to the PhysicsSystem class		: File: Systems.hpp:35
+----- 	Find a way to use a virtual function in IComponentManager to prevent this	: File: Global.hpp:79
+
+General
+- 	Creat program args function to enable vsync and other settings			: File: Window.hpp
+-- 	Implement real resizing/keep ratio of drawable items				: FIle: Window.hpp
+		// Most likely a static variable for width and height in the shaders
+-- 	Remake the text system, primarily the Text and DynamicText elements		: File: UI.hpp

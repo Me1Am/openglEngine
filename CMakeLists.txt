@@ -25,9 +25,15 @@ set(SOURCES
 	"src/include/Heightmap.hpp"
 	"src/include/GameObject.hpp"
 	"src/include/StaticBody.hpp"
+
 	"src/include/shader/BaseShader.hpp"
 	"src/include/shader/TextShader.hpp"
 	"src/include/shader/CubeShader.hpp"
+
+	"src/include/ecs/Node.hpp"
+	"src/include/ecs/Global.hpp"
+	"src/include/ecs/Systems.hpp"
+	"src/include/ecs/Components.hpp"
 )
 
 if(WIN32)
