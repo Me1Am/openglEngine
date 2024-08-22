@@ -95,10 +95,10 @@ btRigidBody* createRigidBody(btCollisionShape* shape, btTransform transform, btS
 
 	btDefaultMotionState* motionState = new btDefaultMotionState(transform);
 	btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, motionState, shape, inertia);
-				
+
 	btRigidBody* rigidBody = new btRigidBody(rbInfo);
 	if(mass != 0.f)
 		rigidBody->setLinearFactor(moveAxises);
-	
+
 	return rigidBody;
 }

@@ -30,10 +30,7 @@ set(SOURCES
 	"src/include/shader/TextShader.hpp"
 	"src/include/shader/CubeShader.hpp"
 
-	"src/include/ecs/Node.hpp"
-	"src/include/ecs/Global.hpp"
-	"src/include/ecs/Systems.hpp"
-	"src/include/ecs/Components.hpp"
+	"src/include/ecs/ECS.hpp"
 )
 
 if(WIN32)
@@ -52,9 +49,9 @@ if(WIN32)
 else()
 	set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 	set(COMPILE_FLAGS="-g -Wall")
-	
+
 	add_executable(openglEngine)
-	
+
 	# If your distro used freetype2 for freetype 2.x
 	if(NOT EXISTS "/usr/include/freetype/")
 		target_include_directories(openglEngine PRIVATE "/usr/include/freetype2/")

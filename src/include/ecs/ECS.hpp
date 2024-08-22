@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <SDL2/SDL_scancode.h>
 #include <bullet/btBulletDynamicsCommon.h>
+#include <BulletWorldImporter/btBulletWorldImporter.h>
 
 #include <unordered_map>
 #include <type_traits>
@@ -21,6 +22,7 @@
 #include <set>
 
 #include "../shader/BaseShader.hpp"
+#include "../PhysicsDrawer.hpp"
 
 #define MAX_COMPONENTS 32
 #define MAX_ENTITIES 4096
@@ -338,16 +340,30 @@ class InputSystem : public System {
 };
 
 /// @brief Controls physics interactions
-// TODO Move functionality from PhysicsEngine here
+/// @details holds everything required to host a physics world
 class PhysicsSystem : public System {
 	public:
-		PhysicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr) 
-			: positionCompArr(positionCompArr), physicsCompArr(physicsCompArr) {}
+		PhysicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, const std::string& initialStatePath) 
+			: positionCompArr(positionCompArr), physicsCompArr(physicsCompArr), debugDrawer(new PhysicsDrawer()) {
+				// Initialize bullet subsystems
+				collisionConfig = new btDefaultCollisionConfiguration();
+				dispatcher = new btCollisionDispatcher(collisionConfig);
+				interface = new btDbvtBroadphase();
+				solver = new btSequentialImpulseConstraintSolver();
+				dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, interface, solver, collisionConfig);
+
+				dynamicsWorld->setGravity(btVector3(0.f, -10.f, 0.f));
+				dynamicsWorld->setDebugDrawer(debugDrawer);
+
+				if(initialStatePath.compare("") != 0)
+					loadState(initialStatePath);
+
+				saveState("./saves/initState.bin");
+			}
 		~PhysicsSystem() {}
 		void tick(const Uint32& deltaTime) {
-			// dynamicsworld->stepSimulation(deltaTime);
+			dynamicsWorld->stepSimulation(deltaTime / 1000.f, 10);
 
-			// TODO Look at motionstate to automatically update the PositionComponent's transform
 			for(const Entity& entity : entities) {
 				PhysicsComponent* physicsComp = physicsCompArr->get(entity);
 				PositionComponent* positionComp = positionCompArr->get(entity);
@@ -385,9 +401,150 @@ class PhysicsSystem : public System {
 				positionComp->transform = worldTransform;
 			}
 		}
+		/// @brief Casts a ray from `origin` with a heading of `direction` and length of `len`
+		/// @returns A pointer to the hit rigidbody or nullptr if there's no collision
+		const btRigidBody* castRay(const glm::vec3& origin, const glm::vec3& direction, const float len) {
+			btVector3 from = btVector3(origin.x, origin.y, origin.z);
+			btVector3 dir = btVector3(direction.x, direction.y, direction.z);
+			btVector3 to = from + (dir * len);
+
+			btDynamicsWorld::ClosestRayResultCallback callback(from, to);
+
+			dynamicsWorld->rayTest(from, to, callback);
+
+			if(callback.hasHit()){
+				const btRigidBody* body = btRigidBody::upcast(callback.m_collisionObject);
+
+				if(body){
+					const btVector3 pos = body->getWorldTransform().getOrigin();
+
+					std::cout << 
+						"Hit Object at: " << 
+							pos.getX() << 
+							", " << 
+							pos.getY() << 
+							", " << 
+							pos.getZ() << 
+						'\n';
+
+					return body;
+				}
+			}
+			return nullptr;
+		}
+		/// @brief Use the physics debugger to draw with the given debug level
+		void debugDraw(const glm::mat4& cameraView, const float& cameraFOV, const int debugMode) {
+			debugDrawer->setDebugMode(debugMode);
+			debugDrawer->setCamera(cameraView, cameraFOV);
+
+			dynamicsWorld->debugDrawWorld();
+		}
+		/// @brief Resets the simulation to its starting state
+		/// @note Attempts to load initState.bin from the saves folder
+		void reset() {
+			loadState("saves/initState.bin");
+		}
+		/// @brief Saves the current state of the physics engine to a file
+		void saveState(const std::string& filename) {
+			btDefaultSerializer* serializer = new btDefaultSerializer();
+
+			dynamicsWorld->serialize(serializer);
+
+			std::ofstream file(filename, std::ios::binary);
+			if(file.is_open()){
+				file.write(reinterpret_cast<const char*>(serializer->getBufferPointer()), serializer->getCurrentBufferSize());
+				file.close();
+			} else {
+				std::cerr << "PhysicsSystem::saveState(): Unable to create file at \"" + filename + "\"\n";
+			}
+
+			delete serializer;
+		}
+		/// @brief Loads a saved state of the physics engine
+		/// @throws runtime_error if it fails to deserialize the file
+		void loadState(const std::string& filename) {
+			// Attemp to load the file before deleting everything
+			int bufferSize;
+			unsigned char* data = getFileData(filename, bufferSize);
+			if(data == nullptr){
+				return;
+			}
+
+			for(int i = dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; i--) {
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+				btRigidBody* body = btRigidBody::upcast(obj);
+
+				if(body && body->getMotionState())
+					delete body->getMotionState();
+				dynamicsWorld->removeCollisionObject(obj);
+				delete obj;
+			}
+			// Delete collision shapes
+			for(int i = 0; i < objArray.size(); i++) {
+				btCollisionShape* shape = objArray[i];
+				objArray[i] = 0;
+				delete shape;
+			}
+			objArray.resize(0);
+
+			// Recreate
+			collisionConfig = new btDefaultCollisionConfiguration();
+			dispatcher = new btCollisionDispatcher(collisionConfig);
+			interface = new btDbvtBroadphase();
+			solver = new btSequentialImpulseConstraintSolver();
+			dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, interface, solver, collisionConfig);
+
+			btBulletWorldImporter* importer = new btBulletWorldImporter(dynamicsWorld);
+
+			if(!importer->loadFileFromMemory(reinterpret_cast<char*>(data), bufferSize))
+				throw std::runtime_error("PhysicsSystem::loadState(): Unable to deserialize file at \"" + filename + '"');
+
+			dynamicsWorld->setDebugDrawer(debugDrawer);
+
+			for(int i = 0; i < dynamicsWorld->getNumCollisionObjects(); i++) {
+				btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[i];
+				objArray.push_back(obj->getCollisionShape());
+			}
+
+			delete[] data;
+			delete importer;
+		}
 	private:
+		/// @brief Loads a file into memory and returns its data
+		/// @param filename The file path to load
+		/// @param bufferSize A variable to hold the file size
+		/// @returns Raw file data and file size through the `bufferSize` parameter
+		unsigned char* getFileData(const std::string& filename, int& bufferSize) {
+			std::ifstream file(filename, std::ios::binary | std::ios::ate);	// Open binary file at EOF
+
+			if(file.is_open()){
+				bufferSize = file.tellg();
+				file.seekg(0, std::ios::beg);
+
+				unsigned char* buffer = new unsigned char[bufferSize];
+				file.read(reinterpret_cast<char*>(buffer), bufferSize);
+				file.close();
+
+				return buffer;
+			} else {
+				std::cerr << "PhysicsSystem::getFileData(): Unable to open/load file at \"" + filename + "\"\n";
+				return nullptr;
+			}
+		}
+
+		// Component dependencies
 		ComponentArray<PositionComponent>* positionCompArr;
 		ComponentArray<PhysicsComponent>* physicsCompArr;
+
+		// Bullet Physics Members
+		btDefaultCollisionConfiguration* collisionConfig;	// Default memory and collision setup
+		btCollisionDispatcher* dispatcher;					// Collision handler
+		btBroadphaseInterface* interface;					// AABB collision detection interface
+		btSequentialImpulseConstraintSolver* solver;		// Constraint solver
+		btDiscreteDynamicsWorld* dynamicsWorld;				// Dynamics world
+		btAlignedObjectArray<btCollisionShape*> objArray;	// Collision shape array
+
+		PhysicsDrawer* debugDrawer;
 };
 
 /// @brief Controls graphics
@@ -478,4 +635,3 @@ class SystemManager {
 		/// @brief Matches type hash codes to a system
 		std::unordered_map<size_t, std::unique_ptr<System>> systems;
 };
-

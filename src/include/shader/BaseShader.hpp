@@ -136,6 +136,25 @@ class BaseShader {
 			glUniformMatrix4fv(glGetUniformLocation(programID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 		}
 		/**
+		 * @brief Applies the appropriate transforms to show perspective or not
+		 * @param transform The model tranform
+		 * @param cameraView The 4x4 matrix representing the camera's view
+		 * @param fov The camera's fov
+		 */
+		void perspective(const glm::mat4x4& transform, const glm::mat4 cameraView, const float fov) {
+			glm::mat4 model = transform;
+			glm::mat4 view 	= glm::mat4(1.f);
+			glm::mat4 projection = glm::mat4(1.f);
+
+			model = glm::scale(model, scale);						// Set scale
+			projection = glm::perspective(glm::radians(fov), 640.f / 480.f, 0.1f, 1000.f);
+			view = cameraView;
+
+			glUniformMatrix4fv(glGetUniformLocation(programID, "model"), 1, GL_FALSE, glm::value_ptr(model));
+			glUniformMatrix4fv(glGetUniformLocation(programID, "view"), 1, GL_FALSE, glm::value_ptr(view));
+			glUniformMatrix4fv(glGetUniformLocation(programID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		}
+		/**
 		 * @brief Sets the rotation of the object by the given radians, on the given axis
 		 * @param radians Float representing the amount to rotate by
 		 * @param xAxis Float representing the x axis value for applying the rotation
