@@ -18,52 +18,33 @@
 #include "UI.hpp"
 #include "Heightmap.hpp"
 
+#include "ecs/ECS.hpp"
+
+#define CREATE_ERROR(msg, err) fprintf(stderr, "Window::init(): %s %i %c", msg, err, '\n'); return 0
+#define CREATE_GL_ERROR(msg) fprintf(stderr, "Window::initOpenGL(): %s %c", msg, '\n'); return false
+#define KEYBOARD windowData.inputData.keyboardState
+
+/// @brief Data used to create a SDL window
+/// @note SDL_WINDOW_OPENGL is implied in sdlFlags
+struct WindowCreationData {
+	std::string title = "Window";
+	int x = SDL_WINDOWPOS_CENTERED;
+	int y = SDL_WINDOWPOS_CENTERED;
+	int width = 640;
+	int height = 480;
+	uint32_t sdlFlags = SDL_WINDOW_RESIZABLE;
+	uint32_t sdlSubsystems = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
+};
+
 class Window {
 	public:
-		/**
-		 * @brief Default constructor
-		 * @note Sets window to 640x480
-		 * @note Sets sensitivity to 0.1
-		 * @note Sets frame time to 16.6667
-		*/
-		Window() : SENSITIVITY(0.1f), MIN_FRAME_TIME(16.66666667f) {
-			width = 640;
-			height = 480;
-			zBuffer = false;
-			debugDraw = false;
-		}
-		/**
-		 * @brief Constructor
-		 * @param width The width of the window in pixels
-		 * @param height The height of the window in pixels
-		 * @note Sets sensitivity to 0.1
-		 * @note Sets frame time to 16.6667
-		*/
-		Window(const int width, const int height) : SENSITIVITY(0.1f), MIN_FRAME_TIME(16.66666667f) {
-			this->width = width;
-			this->height = height;
-			zBuffer = false;
-			debugDraw = false;
-		}
-		/**
-		 * @brief Constructor
-		 * @param width The width of the window in pixels
-		 * @param height The height of the window in pixels
-		 * @param sensitivity The sensitivity of the mouse
-		 * @param frameTime The minimum frame time in miliseconds
-		*/
-		Window(const int width, const int height, const float sensitivity, const float frameTime) 
-			: SENSITIVITY(sensitivity), MIN_FRAME_TIME(frameTime){
-			this->width = width;
-			this->height = height;
-			zBuffer = false;
-			debugDraw = false;
-		}
+		Window() {}
 		~Window() {
 			baseShader.freeProgram();
 			heightmap.freeProgram();
 			textShader.freeProgram();
-			SDL_DestroyWindow(window);		// Delete window
+
+			SDL_DestroyWindow(window);
 
 			SDL_Quit();	// Quit SDL
 
@@ -71,63 +52,56 @@ class Window {
 			delete ui;
 			delete heightfield;
 		}
-		/**
-		 * @brief Initializes subsystems and creates the window and other resources
-		 * @return A bool whether the creation was successful or not
-		 */		
-		bool create() {
+		/// Initializes subsystems and creates the window and other resources
+		int init(const WindowCreationData& creationData) {
+			// Update windowData defaults
+			windowData.title = creationData.title;
+			windowData.width = creationData.width;
+			windowData.height = creationData.height;
+
 			// Init Video and Events Subsystems
-			if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0){
-				std::cout << "Unable to initialize SDL_VIDEO or SDL_EVENTS, SDL_Error: " << SDL_GetError() << std::endl;
-				return false;
+			if(SDL_Init(creationData.sdlSubsystems) < 0){
+				CREATE_ERROR("Unable to initialize subsystems, SDL_Error: ", SDL_GetError());
 			}
-			
-			// Use OpenGL 3.1 core
+
+			// Use OpenGL 4.1 core
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-			
+
 			// Other OpenGL settings
 			SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 			SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 
-			// Create window 
 			window = SDL_CreateWindow(
-				"Physics Engine", 
-				SDL_WINDOWPOS_UNDEFINED, 
-				SDL_WINDOWPOS_UNDEFINED, 
-				width, 
-				height, 
-				SDL_WINDOW_SHOWN |
-				SDL_WINDOW_RESIZABLE |
-				SDL_WINDOW_OPENGL 
+				creationData.title.c_str(),
+				creationData.x,
+				creationData.y,
+				creationData.width,
+				creationData.height,
+				creationData.sdlFlags | SDL_WINDOW_OPENGL
 			);
-			if(window == NULL){
-				std::cout << "Unable to create window, SDL_Error: " << SDL_GetError() << std::endl;
-				return false;
+			if(window == nullptr){
+				CREATE_ERROR("Unable to create the window, SDL_Error: ", SDL_GetError());
 			}
 
-			// Create OpenGL context
 			gContext = SDL_GL_CreateContext(window);
-			if(gContext == NULL){
-				std::cout << "Unable to create OpenGL context, SDL_Error: " << SDL_GetError() << std::endl;
-				return false;
+			if(gContext == nullptr){
+				CREATE_ERROR("Unable to create OpenGL context, SDL_Error: ", SDL_GetError());
 			}
-			
-			// Initialize Glew
+
 			glewExperimental = GL_TRUE;
 			GLenum glewStatus = glewInit();
 			if (glewStatus != GLEW_OK){
-				std::cout << "Unable to initialize GLEW, GLEW Error: " << glewGetErrorString(glewStatus) << std::endl;
-				return false;
+				CREATE_ERROR("Unable to initialize GLEW, GLEW Error: ", glewGetErrorString(glewStatus));
 			}
 
 			// TODO Creat program args function to enable vsync
 			// Enable VSync
 			SDL_GL_SetSwapInterval(1);
 			if(SDL_GL_GetSwapInterval() != 1){
-				std::cout << "Warning: Unable to enable VSync, SDL_Error: " << SDL_GetError() << std::endl;
+				std::cerr << "Warning: Unable to enable VSync, SDL_Error: " << SDL_GetError() << std::endl;
 			}
 
 			// Initialize shared variables
@@ -135,32 +109,282 @@ class Window {
 			debugDrawTime.reset(new Uint32(0));
 			pause.reset(new bool(true));
 
-			// Initialize physics engine
 			physicsEngine = new PhysicsEngine();
 			if(!physicsEngine->init()){
-				std::cout << "Unable to initialize physics engine" << std::endl;
-				return false;
+				std::cerr << "Unable to initialize physics engine" << std::endl;
+				return 0;
 			}
 
-			// Initialize OpenGL
 			if(!initOpenGL()){
-				std::cout << "Unable to initialize OpenGL" << std::endl;
-				return false;
+				std::cerr << "Unable to initialize OpenGL" << std::endl;
+				return 0;
 			}
 
-			keyboard = SDL_GetKeyboardState(NULL);	// Get pointer to internal keyboard state
+			KEYBOARD = SDL_GetKeyboardState(NULL);	// Get pointer to internal keyboard state
 
-			paused = true;
+			windowData.id = SDL_GetWindowID(window);
+			if(windowData.id == 0){
+				CREATE_ERROR("Unable to get window id, SDL_Error: ", SDL_GetError());
+			}
+
+			windowData.paused(true);
 			SDL_SetRelativeMouseMode(SDL_FALSE);
 			SDL_ShowCursor(SDL_TRUE);
 
 			return true;
 		}
-		/// Initializes OpenGL components
+		/// Runs main loop
+		void loop() {
+			SDL_Event event;
+
+			// Main Event Loop
+			while(true) {
+				while(SDL_PollEvent(&event)) {
+					// Main Event Handler
+					switch(event.type) {
+						case SDL_WINDOWEVENT: {
+							if(event.window.windowID == windowData.id){
+								switch(event.window.event) {
+									case SDL_WINDOWEVENT_CLOSE:	// Window receives close command
+										return;
+									case SDL_WINDOWEVENT_RESIZED:
+										resize();
+									default:
+										break;
+								}
+							}
+							break;
+						} case SDL_KEYDOWN: {
+							// Pause
+							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
+								windowData.paused(!windowData.paused());
+								*pause = !(*pause);
+
+								SDL_SetRelativeMouseMode((SDL_bool)(!windowData.paused()));
+								SDL_ShowCursor((SDL_bool)(windowData.paused()));
+							// Show z-buffer
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !windowData.paused()){
+								windowData.zBuffer(!windowData.zBuffer());
+								if(windowData.zBuffer()){
+									if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/zBuffer.frag", "", "")){
+										std::cerr << "Unable to load z-buffer shader" << std::endl;
+										baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
+										windowData.zBuffer(false);
+									}
+								} else {
+									baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
+								}
+							// Reset physics sim
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_R) {
+								physicsEngine->reset();
+							// Enable physics debug draw
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F1) {
+								windowData.debugDraw(!windowData.debugDraw());
+
+								if(!windowData.debugDraw())
+									*debugDrawTime = 0;
+							// Save the physics engine state
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F5) {
+								physicsEngine->saveState("./saves/savedState.bin");
+
+								#ifdef DEBUG
+									std::cout << "Saved physics state to file: ./saves/savedState.bin\n";
+								#endif
+							// Load a physics engine state file
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_F6) {
+								physicsEngine->loadState("./saves/savedState.bin");
+
+								#ifdef DEBUG
+									std::cout << "Loaded physics state from file: ./saves/savedState.bin\n";
+								#endif
+							}
+							break;
+						} case SDL_MOUSEMOTION: {
+							if(windowData.paused()) break;
+							float offsetX = event.motion.xrel;
+							float offsetY = event.motion.yrel;
+
+							// Adjust for sensitivity
+							offsetX *= windowData.inputData.sensitivity;
+							offsetY *= windowData.inputData.sensitivity;
+
+							camera.incYaw(offsetX);
+							camera.incPitch(-offsetY);
+						} case SDL_MOUSEBUTTONDOWN: {
+							windowData.inputData.mbState = SDL_GetMouseState(&windowData.inputData.xPos, &windowData.inputData.yPos);
+
+							switch(windowData.inputData.mbState) {
+								case SDL_BUTTON(1): {	// LMB - Cast ray to pointer(from center of the screen)
+									if(!windowData.paused())
+										break;
+
+									// Normalize mouse position to [-1, 1]
+									glm::vec3 rayNDS = glm::vec3(
+										(2.f * windowData.inputData.xPos) / windowData.width - 1.f, 
+										1.f - (2.f * windowData.inputData.yPos) / windowData.height, 
+										1.f
+									);
+
+									glm::vec4 rayClip = glm::vec4(rayNDS.x, rayNDS.y, -1.f, 1.f);
+									glm::vec4 rayEye = glm::inverse(glm::perspective(glm::radians(camera.getFOV()), (float)(windowData.width / windowData.height), 0.1f, 1000.f)) * rayClip;
+									rayEye = glm::vec4(rayEye.x, rayEye.y, -1.f, 0.f);
+
+									glm::vec3 rayWorld = glm::vec3(glm::inverse(camera.calcCameraView()) * rayEye);
+									rayWorld = glm::normalize(rayWorld);
+
+									glm::vec3 rayOrigin = glm::vec3(glm::inverse(camera.calcCameraView()) * glm::vec4(0, 0, 0, 1));
+
+									physicsEngine->castRay(rayOrigin, rayWorld, 100.f);
+
+									break;
+								} case SDL_BUTTON(2):	// MMB
+									break;
+								case SDL_BUTTON(3):		// RMB
+									break;
+							}
+							break;
+						} case SDL_MOUSEWHEEL: {
+							if(windowData.paused()) break;
+
+							camera.incFOV(-event.wheel.y * 2.5f);
+							break;
+						} 
+						case SDL_QUIT:	// Quit window
+							SDL_Quit();	// Cleanup subsystems
+							return;	// Exit loop
+						default:
+							break;
+					}
+				}
+
+				tick();
+				render();
+
+				// Framerate Handling
+				Uint32 currentTime = SDL_GetTicks();
+				*delta_t = currentTime - windowData.prevTime;
+				if(SDL_GL_GetSwapInterval() != 1){
+					SDL_Delay((*delta_t < windowData.minFrameTime) ? windowData.minFrameTime - *delta_t : 0);
+				}
+				windowData.prevTime = SDL_GetTicks();
+			}
+		}
+		/// Resize Window
+		// TODO Implement real resizing/keep ratio of drawable items
+		void resize() {
+			SDL_GL_GetDrawableSize(window, &windowData.width, &windowData.height);
+			glViewport(0, 0, windowData.width, windowData.height);
+		}
+		/// Run Logic
+		void tick() {
+			// Constant Logic
+
+			// Runtime Logic
+			if(windowData.paused()){	// Paused Logic
+
+			} else {
+				// Camera
+				if(KEYBOARD[SDL_SCANCODE_E]){
+					camera.incRoll(1.5f * (*delta_t) / 1000);	// Roll right(increase)
+				} else if(KEYBOARD[SDL_SCANCODE_Q]) {
+					camera.incRoll(-1.5f * (*delta_t) / 1000);	// Roll left(decrease)
+				}
+				if(KEYBOARD[SDL_SCANCODE_EQUALS] && camera.getSpeed() < 1.f){
+					camera.setSpeed(camera.getSpeed() + (0.00005f * (*delta_t)));
+				} else if(KEYBOARD[SDL_SCANCODE_MINUS]){
+					camera.setSpeed(camera.getSpeed() - (0.00005f * (*delta_t)));
+				}
+
+				// Camera position for view calculations
+				camera.updateCameraPosition(
+					KEYBOARD[SDL_SCANCODE_W], 
+					KEYBOARD[SDL_SCANCODE_S], 
+					KEYBOARD[SDL_SCANCODE_A], 
+					KEYBOARD[SDL_SCANCODE_D], 
+					KEYBOARD[SDL_SCANCODE_SPACE], 
+					KEYBOARD[SDL_SCANCODE_LCTRL], 
+					*delta_t
+				);
+				camera.updateCameraDirection();
+
+				physicsEngine->tick((*delta_t) / 1000.f);
+			}
+		}
+		/// Render
+		void render() {
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			// Draw all objects
+			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
+				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
+			}
+
+			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
+
+			if(windowData.debugDraw()){
+				Uint32 currentTime = SDL_GetTicks();
+				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_DrawWireframe);
+				*debugDrawTime = SDL_GetTicks() - currentTime;
+
+				if(*debugDrawTime == 0) *debugDrawTime = 1;	// Make sure it at least shows a value when drawing
+			}
+
+			ui->drawTextElements(textShader);
+
+			glUseProgram(0);
+			SDL_GL_SwapWindow(window);
+		}
+
+		/// --- Variables --- ///
+
+		// TODO Assimilate these into WindowData when revamping UI.hpp
+		std::shared_ptr<Uint32> delta_t;		// The running time between frames
+		std::shared_ptr<Uint32> debugDrawTime;	// The time it takes to draw physics colliders
+		std::shared_ptr<bool> pause;
+
+		/// @brief Collection of window-specific data
+		struct WindowData {
+			// Time (seconds)
+			uint64_t prevTime = 0;				// Time when last frame completed(ms)
+			float deltaT = 0.f;					// Time between frames
+			float frameTime = 0.f;				// Total time to process a frame
+			float renderTime = 0.f;				// Time to render/draw a frame(including debug draw)
+			float minFrameTime = 16.66666667f;	// The minimum time the frame should take(ms)
+
+			// Window aspects
+			int width = 640;
+			int height = 480;
+			std::string title = "Window";
+			uint32_t id;
+
+			// State flags
+			std::bitset<64> flags = 0;
+
+			void paused(const bool& val) { flags.set(0, val); }
+			void zBuffer(const bool& val) { flags.set(1, val); }
+			void debugDraw(const bool& val) { flags.set(2, val); }
+
+			bool paused() { return flags.test(0); }
+			bool zBuffer() { return flags.test(1); }
+			bool debugDraw() { return flags.test(2); }
+
+			struct InputData {
+				// Mouse
+				uint32_t mbState = 0;
+				int32_t xPos = 0;
+				int32_t yPos = 0;
+				float sensitivity = 0.1f;
+
+				// Keyboard
+				const uint8_t* keyboardState = nullptr;
+			} inputData;
+		} windowData;
+	private:
+		/// @brief Initializes OpenGL components
 		bool initOpenGL() {
 			GLint status = GL_FALSE;
 
-			glViewport(0, 0, width, height);
+			glViewport(0, 0, windowData.width, windowData.height);
 			glEnable(GL_CULL_FACE);
 			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_LESS);
@@ -168,17 +392,14 @@ class Window {
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 			if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "")){
-				std::cerr << "Unable to load model shader" << std::endl;
-				return false;
+				CREATE_GL_ERROR("Unable to load model shader");
 			}
 
 			if(!heightmap.loadProgram("../shaders/heightmap.vert", "../shaders/heightmap.frag", "../shaders/heightmap.tesc", "../shaders/heightmap.tese")){
-				std::cerr << "Unable to load heightmap shader" << std::endl;
-				return false;
+				CREATE_GL_ERROR("Unable to load heightmap shader");
 			}
 			if(!textShader.loadProgram("../shaders/text.vert", "../shaders/text.frag")){
-				std::cerr << "Unable to load UI text shader" << std::endl;
-				return false;
+				CREATE_GL_ERROR("Unable to load UI text shader");
 			}
 
 			heightfield = new Heightmap("../assets/heightmap.png");
@@ -209,252 +430,14 @@ class Window {
 
 			GLenum err = glGetError(); 
 			if(err != GL_NO_ERROR) {
-				std::cout << "Unhandled OpenGL Error: " << err << std::endl;
+				std::cerr << "Unhandled OpenGL Error: " << err << std::endl;
 				return false;
 			}
 			return true;
 		}
-		/// Main loop
-		void loop() {
-			SDL_Event event;
-			Uint32 windowID = SDL_GetWindowID(window);
 
-			// Main Event Loop
-			while(true) {
-				while(SDL_PollEvent(&event)) {
-					// Main Event Handler
-					switch(event.type) {
-						case SDL_WINDOWEVENT: {
-							// Window event is for this window(useful if application uses more than one window)
-							if(event.window.windowID == windowID){
-								switch(event.window.event) {
-									case SDL_WINDOWEVENT_CLOSE:	// Window receives close command
-										// Destroy objects
-										baseShader.freeProgram();
-										heightmap.freeProgram();
-										textShader.freeProgram();
-										SDL_DestroyWindow(window);
-
-										// Push quit message
-										event.type = SDL_QUIT;
-										SDL_PushEvent(&event);
-										break;
-									case SDL_WINDOWEVENT_RESIZED:
-										resize();
-									default:
-										break;
-								}
-							}
-							break;
-						} case SDL_KEYDOWN: {
-							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
-								paused = !paused;
-								*pause = !(*pause);
-								
-								SDL_SetRelativeMouseMode((SDL_bool)(!paused));
-								SDL_ShowCursor((SDL_bool)(paused));
-							// Show z-buffer
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !paused){
-								zBuffer = !zBuffer;
-								if(zBuffer){
-									if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/zBuffer.frag", "", "")){
-										std::cerr << "Unable to load z-buffer shader" << std::endl;
-										baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
-										zBuffer = false;
-									}
-								} else {
-									baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
-								}
-							// Reset sim
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_R) {
-								physicsEngine->reset();
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_F1) {
-								debugDraw = !debugDraw;
-
-								if(!debugDraw)
-									*debugDrawTime = 0;
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_F5) {
-								physicsEngine->saveState("./saves/savedState.bin");
-								
-								#ifdef DEBUG
-									std::cout << "Saved physics state to file: ./saves/savedState.bin\n";
-								#endif
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_F6) {
-								physicsEngine->loadState("./saves/savedState.bin");
-								
-								#ifdef DEBUG
-									std::cout << "Loaded physics state from file: ./saves/savedState.bin\n";
-								#endif
-							}
-							break;
-						} case SDL_MOUSEMOTION: {
-							if(paused) break;
-							float offsetX = event.motion.xrel;
-							float offsetY = event.motion.yrel;
-
-							// Adjust for sensitivity
-							offsetX *= SENSITIVITY;
-							offsetY *= SENSITIVITY;
-
-							camera.incYaw(offsetX);
-							camera.incPitch(-offsetY);
-						} case SDL_MOUSEBUTTONDOWN: {
-							int x;
-							int y;
-							mouseButtonState = SDL_GetMouseState(&x, &y);
-
-							switch(mouseButtonState) {
-								case SDL_BUTTON(1): {	// LMB - Cast ray to pointer
-									if(!paused)
-										break;
-
-									// Normalize mouse position to [-1, 1]
-									glm::vec3 rayNDS(
-										(2.f * x) / width - 1.f, 
-										1.f - (2.f * y) / height, 
-										1.f
-									);
-
-									glm::vec4 rayClip(rayNDS.x, rayNDS.y, -1.f, 1.f);
-									glm::vec4 rayEye = glm::inverse(glm::perspective(glm::radians(camera.getFOV()), (float)(width / height), 0.1f, 1000.f)) * rayClip;
-									rayEye = glm::vec4(rayEye.x, rayEye.y, -1.f, 0.f);
-
-									glm::vec3 rayWorld = glm::vec3(glm::inverse(camera.calcCameraView()) * rayEye);
-									rayWorld = glm::normalize(rayWorld);
-
-									glm::vec3 rayOrigin = glm::vec3(glm::inverse(camera.calcCameraView()) * glm::vec4(0, 0, 0, 1));
-
-									physicsEngine->castRay(rayOrigin, rayWorld, 100.f);
-									
-									break;
-								} case SDL_BUTTON(2):	// MMB
-									break;
-								case SDL_BUTTON(3):		// RMB
-									break;
-							}
-							break;
-
-						} case SDL_MOUSEWHEEL: {
-							if(paused) break;
-							
-							camera.incFOV(-event.wheel.y * 2.5f);
-							break;
-						} 
-						case SDL_QUIT:	// Quit window
-							SDL_Quit();	// Cleanup subsystems
-							return;	// Exit loop
-						default:
-							break;
-					}
-				}
-
-				tick();
-				render();
-
-				// Framerate Handling
-				Uint32 currentTime = SDL_GetTicks();
-				*delta_t = currentTime - prevTime;
-				if(SDL_GL_GetSwapInterval() != 1){
-					SDL_Delay((*delta_t < MIN_FRAME_TIME) ? MIN_FRAME_TIME - *delta_t : 0);
-				}
-				prevTime = SDL_GetTicks();
-			}
-		}
-		/// Resize Window
-		// TODO Implement real resizing/keep ratio of drawable items
-		void resize() {
-			SDL_GL_GetDrawableSize(window, &width, &height);	// Set 'width' and 'height'
-
-			glViewport(0, 0, width, height);	// Update OpenGL viewport
-		}
-		/// Run Logic
-		void tick() {
-			// Constant Logic
-
-			// Runtime Logic
-			if(paused){	// Paused Logic
-			
-			} else {
-				// Camera
-				if(keyboard[SDL_SCANCODE_E]){
-					camera.incRoll(1.5f * (*delta_t) / 1000);	// Roll right(increase)
-				} else if(keyboard[SDL_SCANCODE_Q]) {
-					camera.incRoll(-1.5f * (*delta_t) / 1000);	// Roll left(decrease)
-				}
-				if(keyboard[SDL_SCANCODE_EQUALS] && camera.getSpeed() < 1.f){
-					camera.setSpeed(camera.getSpeed() + (0.00005f * (*delta_t)));
-				} else if(keyboard[SDL_SCANCODE_MINUS]){
-					camera.setSpeed(camera.getSpeed() - (0.00005f * (*delta_t)));
-				}
-	
-				// Camera position for view calculations
-				camera.updateCameraPosition(
-					keyboard[SDL_SCANCODE_W], 
-					keyboard[SDL_SCANCODE_S], 
-					keyboard[SDL_SCANCODE_A], 
-					keyboard[SDL_SCANCODE_D], 
-					keyboard[SDL_SCANCODE_SPACE], 
-					keyboard[SDL_SCANCODE_LCTRL], 
-					*delta_t
-				);
-				camera.updateCameraDirection();
-
-				physicsEngine->tick((*delta_t) / 1000.f);
-			}
-		}
-		/// Render
-		void render() {
-			glClearColor(0.02f, 0.02f, 0.02f, 0.f);	// Set clear color
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			
-			// Draw all objects
-			for(long long unsigned int i = 0; i < ObjectHandler::objectList.size(); i++) {
-				ObjectHandler::objectList[i].get()->draw(baseShader, camera.calcCameraView(), camera.getFOV());
-			}
-
-			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
-			
-			if(debugDraw){
-				Uint32 currentTime = SDL_GetTicks();
-				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_DrawWireframe);
-				*debugDrawTime = SDL_GetTicks() - currentTime;
-
-				if(*debugDrawTime == 0) *debugDrawTime = 1;	// Make sure it at least shows a value when drawing
-			}
-			
-			ui->drawTextElements(textShader);
-			
-			glUseProgram(0);	// Unbind
-			
-			glFlush();
-			SDL_GL_SwapWindow(window);	// Update
-			glFinish();
-		}
-	private:
-		SDL_Window* window = NULL;		// The window
-		SDL_Renderer* renderer = NULL;	// The renderer for the window, uses hardware acceleration
-		SDL_GLContext gContext = NULL;	// The OpenGL context
-
-		// Running Window Variables
-		int width;			// The running drawable window width
-		int height;			// The running drawable window width
-		Uint32 prevTime;	// The running time from init last frame was
-		bool zBuffer;
-		bool debugDraw;
-		bool paused;
-
-		// Shared variables
-		std::shared_ptr<Uint32> delta_t;		// The running time between frames
-		std::shared_ptr<Uint32> debugDrawTime;	// The time it takes to draw physics colliders
-		std::shared_ptr<bool> pause;
-
-		// Running Mouse Variables
-		Uint32 mouseButtonState;	// Mouse buttons state
-
-		// Constants
-		const Uint8* keyboard;		// The running state of the keyboard
-		const float SENSITIVITY;	// Mouse sensitivity
-		const float MIN_FRAME_TIME;	// Minimum frame time in ms
+		SDL_Window* window = NULL;
+		SDL_GLContext gContext = NULL;
 
 		// Components
 		PhysicsEngine* physicsEngine;
