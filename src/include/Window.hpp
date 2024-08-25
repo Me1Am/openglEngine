@@ -24,16 +24,65 @@
 #define CREATE_GL_ERROR(msg) fprintf(stderr, "Window::initOpenGL(): %s %c", msg, '\n'); return false
 #define KEYBOARD windowData.inputData.keyboardState
 
+/// @brief Wrapper class for a window's state and settings flags
+class WindowFlags {
+	public:
+		WindowFlags() : flags(0) {}
+		WindowFlags(const WindowFlags& copy) : flags(copy.flags) {}
+		~WindowFlags() = default;
+
+		// Setters
+		void vsync(const uint8_t& val) {
+			if(val > 2){
+				std::cerr << "Unable to set vsync: Invalid setting\n";
+				return;
+			}
+
+			SDL_GL_SetSwapInterval(val);
+			switch(val) {
+				case(0):
+					flags.reset(0);
+					flags.reset(1);
+					break;
+				case(1):
+					flags.set(0);
+					flags.reset(1);
+					break;
+				case(2):
+					flags.reset(0);
+					flags.set(1);
+					break;
+			}
+		}
+		void paused(const bool& val) { flags.set(2, val); }
+		void zBuffer(const bool& val) { flags.set(3, val); }
+		void debugDraw(const bool& val) { flags.set(4, val); }
+
+		// Getters
+		uint8_t vsync() const { return flags.to_ulong() & 0b11; };
+		bool paused() const { return flags.test(2); }
+		bool zBuffer() const { return flags.test(3); }
+		bool debugDraw() const { return flags.test(4); }
+
+		const std::bitset<64>& getRaw() const {
+			return flags;
+		}
+	private:
+		std::bitset<64> flags;
+};
+
 /// @brief Data used to create a SDL window
 /// @note SDL_WINDOW_OPENGL is implied in sdlFlags
 struct WindowCreationData {
 	std::string title = "Window";
-	int x = SDL_WINDOWPOS_CENTERED;
-	int y = SDL_WINDOWPOS_CENTERED;
-	int width = 640;
-	int height = 480;
+	uint32_t x = SDL_WINDOWPOS_CENTERED;
+	uint32_t y = SDL_WINDOWPOS_CENTERED;
+	uint32_t width = 640;
+	uint32_t height = 480;
 	uint32_t sdlFlags = SDL_WINDOW_RESIZABLE;
 	uint32_t sdlSubsystems = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
+	WindowFlags flags;
+	float minFrameTime = 16.66666667;
 };
 
 class Window {
@@ -58,6 +107,8 @@ class Window {
 			windowData.title = creationData.title;
 			windowData.width = creationData.width;
 			windowData.height = creationData.height;
+			windowData.minFrameTime = creationData.minFrameTime;
+			windowData.flags = WindowFlags(creationData.flags);
 
 			// Init Video and Events Subsystems
 			if(SDL_Init(creationData.sdlSubsystems) < 0){
@@ -99,7 +150,7 @@ class Window {
 
 			// TODO Creat program args function to enable vsync
 			// Enable VSync
-			SDL_GL_SetSwapInterval(1);
+			SDL_GL_SetSwapInterval(windowData.flags.vsync());
 			if(SDL_GL_GetSwapInterval() != 1){
 				std::cerr << "Warning: Unable to enable VSync, SDL_Error: " << SDL_GetError() << std::endl;
 			}
@@ -127,7 +178,7 @@ class Window {
 				CREATE_ERROR("Unable to get window id, SDL_Error: ", SDL_GetError());
 			}
 
-			windowData.paused(true);
+			windowData.flags.paused(true);
 			SDL_SetRelativeMouseMode(SDL_FALSE);
 			SDL_ShowCursor(SDL_TRUE);
 
@@ -157,19 +208,19 @@ class Window {
 						} case SDL_KEYDOWN: {
 							// Pause
 							if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
-								windowData.paused(!windowData.paused());
+								windowData.flags.paused(!windowData.flags.paused());
 								*pause = !(*pause);
 
-								SDL_SetRelativeMouseMode((SDL_bool)(!windowData.paused()));
-								SDL_ShowCursor((SDL_bool)(windowData.paused()));
+								SDL_SetRelativeMouseMode((SDL_bool)(!windowData.flags.paused()));
+								SDL_ShowCursor((SDL_bool)(windowData.flags.paused()));
 							// Show z-buffer
-							} else if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !windowData.paused()){
-								windowData.zBuffer(!windowData.zBuffer());
-								if(windowData.zBuffer()){
+							} else if(event.key.keysym.scancode == SDL_SCANCODE_LALT && !windowData.flags.paused()){
+								windowData.flags.zBuffer(!windowData.flags.zBuffer());
+								if(windowData.flags.zBuffer()){
 									if(!baseShader.loadProgram("../shaders/texture.vert", "../shaders/zBuffer.frag", "", "")){
 										std::cerr << "Unable to load z-buffer shader" << std::endl;
 										baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
-										windowData.zBuffer(false);
+										windowData.flags.zBuffer(false);
 									}
 								} else {
 									baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
@@ -179,9 +230,9 @@ class Window {
 								physicsEngine->reset();
 							// Enable physics debug draw
 							} else if(event.key.keysym.scancode == SDL_SCANCODE_F1) {
-								windowData.debugDraw(!windowData.debugDraw());
+								windowData.flags.debugDraw(!windowData.flags.debugDraw());
 
-								if(!windowData.debugDraw())
+								if(!windowData.flags.debugDraw())
 									*debugDrawTime = 0;
 							// Save the physics engine state
 							} else if(event.key.keysym.scancode == SDL_SCANCODE_F5) {
@@ -200,7 +251,7 @@ class Window {
 							}
 							break;
 						} case SDL_MOUSEMOTION: {
-							if(windowData.paused()) break;
+							if(windowData.flags.paused()) break;
 							float offsetX = event.motion.xrel;
 							float offsetY = event.motion.yrel;
 
@@ -215,7 +266,7 @@ class Window {
 
 							switch(windowData.inputData.mbState) {
 								case SDL_BUTTON(1): {	// LMB - Cast ray to pointer(from center of the screen)
-									if(!windowData.paused())
+									if(!windowData.flags.paused())
 										break;
 
 									// Normalize mouse position to [-1, 1]
@@ -244,7 +295,7 @@ class Window {
 							}
 							break;
 						} case SDL_MOUSEWHEEL: {
-							if(windowData.paused()) break;
+							if(windowData.flags.paused()) break;
 
 							camera.incFOV(-event.wheel.y * 2.5f);
 							break;
@@ -262,11 +313,18 @@ class Window {
 
 				// Framerate Handling
 				Uint32 currentTime = SDL_GetTicks();
-				*delta_t = currentTime - windowData.prevTime;
 				if(SDL_GL_GetSwapInterval() != 1){
-					SDL_Delay((*delta_t < windowData.minFrameTime) ? windowData.minFrameTime - *delta_t : 0);
+					Uint32 frameTime = currentTime - windowData.prevTime;
+					if(frameTime < windowData.minFrameTime){
+						SDL_Delay(windowData.minFrameTime - frameTime);
+					}
+					Uint32 newTime = SDL_GetTicks();
+					*delta_t = newTime - windowData.prevTime;
+					windowData.prevTime = newTime;
+				} else {
+					*delta_t = currentTime - windowData.prevTime;
+					windowData.prevTime = currentTime;
 				}
-				windowData.prevTime = SDL_GetTicks();
 			}
 		}
 		/// Resize Window
@@ -280,7 +338,7 @@ class Window {
 			// Constant Logic
 
 			// Runtime Logic
-			if(windowData.paused()){	// Paused Logic
+			if(windowData.flags.paused()){	// Paused Logic
 
 			} else {
 				// Camera
@@ -321,7 +379,7 @@ class Window {
 
 			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
 
-			if(windowData.debugDraw()){
+			if(windowData.flags.debugDraw()){
 				Uint32 currentTime = SDL_GetTicks();
 				physicsEngine->debugDraw(camera.calcCameraView(), camera.getFOV(), btIDebugDraw::DBG_DrawWireframe);
 				*debugDrawTime = SDL_GetTicks() - currentTime;
@@ -356,17 +414,7 @@ class Window {
 			int height = 480;
 			std::string title = "Window";
 			uint32_t id;
-
-			// State flags
-			std::bitset<64> flags = 0;
-
-			void paused(const bool& val) { flags.set(0, val); }
-			void zBuffer(const bool& val) { flags.set(1, val); }
-			void debugDraw(const bool& val) { flags.set(2, val); }
-
-			bool paused() { return flags.test(0); }
-			bool zBuffer() { return flags.test(1); }
-			bool debugDraw() { return flags.test(2); }
+			WindowFlags flags;
 
 			struct InputData {
 				// Mouse

@@ -11,10 +11,12 @@ project(openglEngine VERSION 1.0)
 
 set(SOURCES 
 	"src/main.cpp"
+	"src/Util.cpp"
 	"src/Collision.cpp"
 
 	"src/include/Window.hpp"
 	"src/include/UI.hpp"
+	"src/include/Util.hpp"
 	"src/include/Mesh.hpp"
 	"src/include/Model.hpp"
 	"src/include/PhysicsDrawer.hpp"

@@ -2,7 +2,6 @@ Entity Component System
 - 	Check the efficiency of using a bitset for enabling components for entities	: File: ECS.hpp
 
 General
-- 	Creat program args function to enable vsync and other settings			: File: Window.hpp
 -- 	Implement real resizing/keep ratio of drawable items				: FIle: Window.hpp
 		// Most likely a static variable for width and height in the shaders
 -- 	Research ImGui									: File: n/a
