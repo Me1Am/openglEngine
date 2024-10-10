@@ -1,0 +1,7 @@
+{
+	"name": "Model",
+	"components": [
+		"transform",
+		"render",
+	],
+}

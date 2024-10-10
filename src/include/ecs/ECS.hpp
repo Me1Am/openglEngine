@@ -1,3 +1,5 @@
+#pragma once
+
 #include <GL/glew.h>
 #include <GL/glu.h>
 
@@ -8,12 +10,15 @@
 #include <bullet/btBulletDynamicsCommon.h>
 #include <BulletWorldImporter/btBulletWorldImporter.h>
 
+#include <json/json.h>
+
 #include <unordered_map>
 #include <type_traits>
 #include <functional>
 #include <algorithm>
 #include <typeinfo>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <bitset>
 #include <vector>
@@ -44,7 +49,6 @@ class EntityManager {
 				availableEntities.push(i);
 			}
 		}
-		~EntityManager();
 		/// @brief Returns the next availible Entity or INVALID on failure
 		Entity create() {
 			if(numLivingEntities > MAX_ENTITIES){
@@ -77,6 +81,7 @@ class EntityManager {
 				std::cerr << "Invalid entity ID\n";
 				return;
 			}
+			std::cout << "Set entity, " << entity << "'s componentset to " << components << '\n';
 
 			compBitmasks[entity] = components;
 		}
@@ -122,7 +127,7 @@ template<class T> class ComponentArray : public IComponentArray {
 			}
 
 			entityToComponent.set(entity);
-			components[entity] = components;
+			components[entity] = component;
 			validComponents++;
 		}
 		void remove(const Entity& entity) override {
@@ -154,21 +159,22 @@ class ComponentManager {
 	public:
 		/// @brief Sets the first element of componentArrays to nullptr and availableID to 0
 		ComponentManager() : componentArrays({ nullptr }), availableID(1) {}
-		~ComponentManager();
 		/// @brief Registers a component with the system
 		/// @details Gets the component's hash_code with typeid() and adds it to the map
 		/// @details Then Creates a new ComponentArray for the given component
-		template<class T> void registerComponent() {
+		/// @returns The component bitmask
+		template<class T> ComponentSet registerComponent() {
 			const size_t type = typeid(T).hash_code();
 
 			if(componentIDs.find(type) != componentIDs.end()){
 				std::cerr << "Component already registered\n";
-				return;
+				return ComponentSet(0);
 			}
 
 			componentIDs[type] = availableID;	// Assign the component an ID
-			componentArrays.insert(availableID, new ComponentArray<T>());
-			availableID++;
+			componentArrays.push_back(new ComponentArray<T>());
+
+			return ComponentSet().set(availableID++);	// Return bitmask
 		}
 		/// @brief Returns a component's ID and 0 if invalid
 		template<class T> ComponentID getComponentID() {
@@ -184,8 +190,9 @@ class ComponentManager {
 				std::cerr << "Unknown/Unregistered component, doing nothing\n";
 				return;
 			}
-
+			
 			static_cast<ComponentArray<T>*>(componentArr)->add(entity, component);
+			std::cout << "Added component to entity " << entity << '\n';
 		}
 		/// @brief Removes an entity's component of type T
 		template<class T> void removeComponent(const Entity& entity) {
@@ -215,13 +222,12 @@ class ComponentManager {
 				componentArr->remove(entity);
 			}
 		}
-	private:
 		/// @brief Returns a ComponentArray(implicitly converted to IComponentID), or a nullptr
 		/// @note getComponentID<T>() returns 0 on failure and componentArray's first element is nullptr
 		template<class T> IComponentArray* getComponentArray() {
 			return componentArrays.at(getComponentID<T>());
 		}
-
+	private:
 		/// @brief Collection of ComponentArrays
 		/// @note The first element will always be a nullptr
 		std::vector<IComponentArray*> componentArrays;
@@ -252,13 +258,16 @@ struct PhysicsComponent {
 	}
 };
 
+#include "../Mesh.hpp"
 /// @brief Holds a vao, vbo, and ebo
 struct MeshComponent {
 	GLuint vao = 0;
 	GLuint vbo = 0;
 	GLuint ebo = 0;
 
-	GLuint numIndices;
+	GLuint numIndices = 0;
+
+	std::vector<Texture> textures = {};
 
 	~MeshComponent() {
 		glDeleteBuffers(1, &vao);
@@ -289,7 +298,7 @@ struct ControlComponent {
 
 class System {
 	public:
-		System();
+		System() = default;
 		virtual ~System() = default;
 
 		/// @brief A unique set of entities
@@ -343,7 +352,7 @@ class InputSystem : public System {
 /// @details holds everything required to host a physics world
 class PhysicsSystem : public System {
 	public:
-		PhysicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, const std::string& initialStatePath) 
+		PhysicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, const std::string& initialStatePath = "")
 			: positionCompArr(positionCompArr), physicsCompArr(physicsCompArr), debugDrawer(new PhysicsDrawer()) {
 				// Initialize bullet subsystems
 				collisionConfig = new btDefaultCollisionConfiguration();
@@ -550,7 +559,7 @@ class PhysicsSystem : public System {
 /// @brief Controls graphics
 class GraphicsSystem : public System {
 	public:
-		GraphicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<RenderComponent>* renderCompArr) 
+		GraphicsSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<RenderComponent>* renderCompArr)
 			: positionCompArr(positionCompArr), renderCompArr(renderCompArr){}
 		~GraphicsSystem() {}
 		void tick(BaseShader& shader, const glm::mat4x4& cameraView, const float& fov) {
@@ -572,10 +581,40 @@ class GraphicsSystem : public System {
 				shader.perspective(positionComp->transform, cameraView, fov);
 
 				for(const MeshComponent* mesh : renderComp->meshes) {
+					GLuint diffuseNr = 1;
+					GLuint specularNr = 1;
+					
+					for(GLuint i = 0; i < mesh->textures.size(); i++) {
+						glActiveTexture(GL_TEXTURE0 + i);
+
+						std::string name = mesh->textures[i].type;
+						std::string number;	// The texture number(N in diffuseTextureN)
+						
+						// Compare type
+						if(name == "diffuseTexture"){
+							number = std::to_string(diffuseNr);
+							diffuseNr++;
+						} else if(name == "specMap"){
+							number = std::to_string(specularNr);
+							specularNr++;
+						}
+						
+						shader.setInt(("material." + name).c_str(), i);
+						glBindTexture(GL_TEXTURE_2D, mesh->textures[i].id);
+					}
+
 					glBindVertexArray(mesh->vao);
 					glDrawElements(GL_TRIANGLES, mesh->numIndices, GL_UNSIGNED_INT, 0);
+					glBindVertexArray(0);
 				}
-				glBindVertexArray(0);
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindVertexArray(0);
+
+			GLenum err = glGetError();
+			if(err != GL_NO_ERROR) {
+				std::cerr << "GraphicsSystem ERROR: Unhandled OpenGL Error: " << err << std::endl;
 			}
 		}
 	private:
@@ -588,7 +627,6 @@ class SystemManager {
 	public:
 		/// @brief Sets the first element of componentArrays to nullptr and availableID to 0
 		SystemManager() : systems() {}
-		~SystemManager();
 		/// @brief Registers a component with the system
 		/// @details Gets the component's hash_code with typeid() and creates a system of type T
 		/// @details Then adds them to the map
@@ -608,16 +646,24 @@ class SystemManager {
 		}
 		/// @brief Returns a pointer to the given system
 		template<class T> T* getSystem() {
-			return (T*)systems.at(typeid(T).hash_code()).get();
+			try {
+				return (T*)systems.at(typeid(T).hash_code()).get();
+			} catch(std::out_of_range) {
+				std::cerr << "SystemManager getSystem() ERROR: Class \"" << typeid(T).name() << "\"(hashcode " << typeid(T).hash_code() << ") is not registered\n";
+				return nullptr;
+			}	
 		}
 		/// @brief Changes every system's entity list to match its new component set
 		void entityChanged(const Entity& entity, const ComponentSet& componentSet) {
+			std::cout << "Entity " << entity << " Changed, with componentset of " << componentSet << '\n';
 			for(auto& [id, system] : systems) {
 				const ComponentSet& components = systemDependencies.at(id);
 
 				if((componentSet & components) == components){
 					system.get()->entities.insert(entity);
+					std::cout << "Added entity to system with componentset of " << components << '\n';
 				} else {
+					std::cout << "Removed entity from system with componentset of " << components << '\n';
 					system.get()->entities.erase(entity);
 				}
 			}
@@ -635,3 +681,82 @@ class SystemManager {
 		/// @brief Matches type hash codes to a system
 		std::unordered_map<size_t, std::unique_ptr<System>> systems;
 };
+
+///
+/// Utilities
+///
+#include "../Model.hpp"
+/// @brief Fills the mesh vector in the component
+void initRenderComponent(RenderComponent& component, const std::string& path) {
+	Model model;
+	if(!model.initialize(path.c_str())){
+		std::cerr << "Unable to initialize RenderComponent\n";
+		return;
+	}
+
+	for(const Mesh& mesh : model.getMeshes()) {
+	    MeshComponent meshComp;
+		
+		meshComp.vao = mesh.getVAO();
+		meshComp.vbo = mesh.getVBO();
+		meshComp.ebo = mesh.getEBO();
+
+		meshComp.numIndices = mesh.getIndices().size();
+
+		for(const Texture& texture : mesh.getTextures()) {
+			meshComp.textures.push_back(texture);
+		}
+
+		component.meshes.push_back(new MeshComponent(meshComp));
+	}
+}
+
+/// @brief Creates and initializes a render component
+RenderComponent createRenderComponent(const std::string& path) {
+	RenderComponent renderComp;
+	initRenderComponent(renderComp, path);
+
+	return renderComp;
+}
+
+std::unordered_map<std::string_view, std::pair<ComponentID, std::function<void(const Entity&, ComponentManager&)>>> loadMap;
+
+/// @brief Registers a component's add function with its name
+void registerComponentName(const std::string_view& name, const ComponentID& id, const std::function<void(const Entity&, ComponentManager&)>& addFunction) {
+	loadMap[name] = std::pair<ComponentID, std::function<void(const Entity&, ComponentManager&)>>(id, addFunction);
+}
+
+/// @brief Constructs and registers an entity and its components from a json prefab
+Entity loadEntityFromPrefab(const std::string& path, EntityManager& entityManager, ComponentManager& compManager, SystemManager& sysManager) {
+	std::ifstream docBuffer(path, std::ifstream::binary);
+	Json::Value root;
+	docBuffer >> root;
+
+	Json::Reader reader;
+	Json::IStringStream jsonBuffer;
+	if(!reader.parse(jsonBuffer, root, false)){
+		std::cerr << "Unable to load json at \"" << path << "\"\n";
+		std::cerr << reader.getFormattedErrorMessages() << '\n';
+
+		return EntityManager::INVALID;
+	}
+
+	Entity entity = entityManager.create();
+	if(entity == EntityManager::INVALID)
+		return EntityManager::INVALID;
+
+	const std::string name = root["name"].asString();	// Unused right now
+	ComponentSet components(0);
+	for(const Json::Value& comp : root["components"]) {
+		if(loadMap.find(comp.asString()) != loadMap.end()){
+			const std::pair<ComponentID, std::function<void(const Entity&, ComponentManager&)>>& component = loadMap.find(comp.asString())->second;
+
+			component.second(entity, compManager);
+			components.set(component.first);
+		} else {
+			std::cerr << "Unable to load component \"" << comp.asString() << "\". Component not registered in map, skipping\n";
+		}
+	}
+
+	return entity;
+}
