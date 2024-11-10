@@ -16,6 +16,7 @@ set(SOURCES
 
 	"src/include/Window.hpp"
 	"src/include/UI.hpp"
+	"src/include/Text.hpp"
 	"src/include/Util.hpp"
 	"src/include/Mesh.hpp"
 	"src/include/Model.hpp"
@@ -47,7 +48,7 @@ if(WIN32)
 		"C:/Users/JTK6759/Documents/apps/msys64/ucrt64/include/bullet/"
 	)
 	target_compile_definitions(openglEngine PRIVATE DEBUG WIN32)
-	target_link_libraries(openglEngine PRIVATE SDL2 SOIL opengl32 glew32 freeglut assimp freetype BulletDynamics BulletCollision LinearMath BulletWorldImporter)
+	target_link_libraries(openglEngine PRIVATE SDL2 SOIL opengl32 glew32 freeglut assimp freetype BulletDynamics BulletCollision LinearMath BulletWorldImporter jsoncpp)
 else()
 	set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 	set(COMPILE_FLAGS="-g -Wall")
@@ -60,7 +61,7 @@ else()
 	endif()
 	target_include_directories(openglEngine PRIVATE "/usr/include/bullet/")
 	target_compile_definitions(openglEngine PRIVATE DEBUG)
-	target_link_libraries(openglEngine PRIVATE SDL2 GL GLEW SOIL assimp freetype BulletDynamics BulletCollision LinearMath BulletWorldImporter)
+	target_link_libraries(openglEngine PRIVATE SDL2 GL GLEW SOIL assimp freetype BulletDynamics BulletCollision LinearMath BulletWorldImporter jsoncpp)
 endif()
 
 target_sources(openglEngine PRIVATE ${SOURCES})

@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
 		Util::CMDParser cmdArgs(argc, argv);
 
 		// Vsync
-		if(cmdArgs.hasOption("--vsync")){	
+		if(cmdArgs.hasOption("--vsync")){
 			windowData.flags.vsync(1);
 		} else {
 			windowData.flags.vsync(0);

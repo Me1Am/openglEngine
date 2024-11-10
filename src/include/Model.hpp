@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -9,6 +10,7 @@
 #include <assimp/postprocess.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Mesh.hpp"
@@ -88,6 +90,9 @@ class Model {
 			auto iter = std::find_if(meshes.begin(), meshes.end(), 
 				[name](Mesh& mesh) { return mesh.getName() == name; });
 			return &meshes[std::distance(meshes.begin(), iter)];
+		}
+		const std::vector<Mesh>& getMeshes() const {
+			return meshes;
 		}
 	private:
 		void processNode(aiNode* node, const aiScene* scene) {

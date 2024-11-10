@@ -13,9 +13,7 @@
 #include <json/json.h>
 
 #include <unordered_map>
-#include <type_traits>
 #include <functional>
-#include <algorithm>
 #include <typeinfo>
 #include <iostream>
 #include <fstream>
@@ -28,6 +26,7 @@
 
 #include "../shader/BaseShader.hpp"
 #include "../PhysicsDrawer.hpp"
+#include "../Model.hpp"
 
 #define MAX_COMPONENTS 32
 #define MAX_ENTITIES 4096
@@ -190,7 +189,7 @@ class ComponentManager {
 				std::cerr << "Unknown/Unregistered component, doing nothing\n";
 				return;
 			}
-			
+
 			static_cast<ComponentArray<T>*>(componentArr)->add(entity, component);
 			std::cout << "Added component to entity " << entity << '\n';
 		}
@@ -278,15 +277,9 @@ struct MeshComponent {
 
 /// @brief Holds a pointer to a `ModelComponent` and `PositionComponent`
 struct RenderComponent {
-	std::vector<MeshComponent*> meshes = {};
+	Model model;
 	glm::vec3 scale = glm::vec3(1.f);
 	bool visible = true;
-
-	~RenderComponent() {
-		for(MeshComponent* mesh : meshes) {
-			delete mesh;
-		}
-	}
 };
 
 /// @brief Holds a map of SDL_Scancode(keys) to functions(values)
@@ -309,7 +302,7 @@ class System {
 /// @brief Controls input interactions
 class InputSystem : public System {
 	public:
-		InputSystem(const Uint8* keyboardState, ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, ComponentArray<ControlComponent>* controlCompArr) 
+		InputSystem(const Uint8* keyboardState, ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, ComponentArray<ControlComponent>* controlCompArr)
 			: keyboardState(keyboardState), positionCompArr(positionCompArr), physicsCompArr(physicsCompArr), controlCompArr(controlCompArr) {}
 		~InputSystem() {}
 		/// @brief Initialize the system
@@ -389,19 +382,19 @@ class PhysicsSystem : public System {
 				// Calculate world transform
 				glm::mat4 worldTransform = glm::mat4(1.0f);
 				worldTransform = glm::translate(	// Apply position
-					worldTransform, 
+					worldTransform,
 					glm::vec3(
-						physicsPos.getX(), 
-						physicsPos.getY(), 
+						physicsPos.getX(),
+						physicsPos.getY(),
 						physicsPos.getZ()
 					)
 				);
 				worldTransform = (
 					glm::mat4_cast(	// Apply rotation
 						glm::quat(
-							physicsRot.getW(), 
-							physicsRot.getX(), 
-							physicsRot.getY(), 
+							physicsRot.getW(),
+							physicsRot.getX(),
+							physicsRot.getY(),
 							physicsRot.getZ()
 						)
 					) * worldTransform
@@ -427,13 +420,13 @@ class PhysicsSystem : public System {
 				if(body){
 					const btVector3 pos = body->getWorldTransform().getOrigin();
 
-					std::cout << 
-						"Hit Object at: " << 
-							pos.getX() << 
-							", " << 
-							pos.getY() << 
-							", " << 
-							pos.getZ() << 
+					std::cout <<
+						"Hit Object at: " <<
+							pos.getX() <<
+							", " <<
+							pos.getY() <<
+							", " <<
+							pos.getZ() <<
 						'\n';
 
 					return body;
@@ -579,38 +572,8 @@ class GraphicsSystem : public System {
 					renderComp->scale.z
 				);
 				shader.perspective(positionComp->transform, cameraView, fov);
-
-				for(const MeshComponent* mesh : renderComp->meshes) {
-					GLuint diffuseNr = 1;
-					GLuint specularNr = 1;
-					
-					for(GLuint i = 0; i < mesh->textures.size(); i++) {
-						glActiveTexture(GL_TEXTURE0 + i);
-
-						std::string name = mesh->textures[i].type;
-						std::string number;	// The texture number(N in diffuseTextureN)
-						
-						// Compare type
-						if(name == "diffuseTexture"){
-							number = std::to_string(diffuseNr);
-							diffuseNr++;
-						} else if(name == "specMap"){
-							number = std::to_string(specularNr);
-							specularNr++;
-						}
-						
-						shader.setInt(("material." + name).c_str(), i);
-						glBindTexture(GL_TEXTURE_2D, mesh->textures[i].id);
-					}
-
-					glBindVertexArray(mesh->vao);
-					glDrawElements(GL_TRIANGLES, mesh->numIndices, GL_UNSIGNED_INT, 0);
-					glBindVertexArray(0);
-				}
-				glBindTexture(GL_TEXTURE_2D, 0);
+				renderComp->model.draw(shader);
 			}
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glBindVertexArray(0);
 
 			GLenum err = glGetError();
 			if(err != GL_NO_ERROR) {
@@ -651,7 +614,7 @@ class SystemManager {
 			} catch(std::out_of_range) {
 				std::cerr << "SystemManager getSystem() ERROR: Class \"" << typeid(T).name() << "\"(hashcode " << typeid(T).hash_code() << ") is not registered\n";
 				return nullptr;
-			}	
+			}
 		}
 		/// @brief Changes every system's entity list to match its new component set
 		void entityChanged(const Entity& entity, const ComponentSet& componentSet) {
@@ -685,40 +648,6 @@ class SystemManager {
 ///
 /// Utilities
 ///
-#include "../Model.hpp"
-/// @brief Fills the mesh vector in the component
-void initRenderComponent(RenderComponent& component, const std::string& path) {
-	Model model;
-	if(!model.initialize(path.c_str())){
-		std::cerr << "Unable to initialize RenderComponent\n";
-		return;
-	}
-
-	for(const Mesh& mesh : model.getMeshes()) {
-	    MeshComponent meshComp;
-		
-		meshComp.vao = mesh.getVAO();
-		meshComp.vbo = mesh.getVBO();
-		meshComp.ebo = mesh.getEBO();
-
-		meshComp.numIndices = mesh.getIndices().size();
-
-		for(const Texture& texture : mesh.getTextures()) {
-			meshComp.textures.push_back(texture);
-		}
-
-		component.meshes.push_back(new MeshComponent(meshComp));
-	}
-}
-
-/// @brief Creates and initializes a render component
-RenderComponent createRenderComponent(const std::string& path) {
-	RenderComponent renderComp;
-	initRenderComponent(renderComp, path);
-
-	return renderComp;
-}
-
 std::unordered_map<std::string_view, std::pair<ComponentID, std::function<void(const Entity&, ComponentManager&)>>> loadMap;
 
 /// @brief Registers a component's add function with its name

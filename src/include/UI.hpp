@@ -51,6 +51,8 @@ class Text {
 
 			auto fChars = font.lock().get()->charMap;
 
+			GLenum err = glGetError(); if(err != GL_NO_ERROR) {	std::cerr << "Unhandled OpenGL Error: " << err << " for \"" << text << "\"\n"; }
+
 			shader.bind();
 			shader.setColor(color);
 			shader.setPos(glm::vec3(640.f, 480.f, 0.f));
@@ -86,12 +88,13 @@ class Text {
 				glBindBuffer(GL_ARRAY_BUFFER, shader.getVBO());
 				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
 				glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+				
 				glDrawArrays(GL_TRIANGLES, 0, 6);
 
 				// Adjust next X position for the next character
 				x += (ch.advance >> 6) * scale; // Bitshift by 6 to get value in pixels
 			}
+
 			glBindVertexArray(0);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
@@ -162,7 +165,8 @@ class UI {
 			#ifdef WIN32
 				loadFChars(128, "c:\\Windows\\Fonts\\Arial.ttf");
 			#else
-				loadFChars(128, "/home/main/.local/share/fonts/common-web/Arial.TTF");
+				//loadFChars(128, "/home/main/.local/share/fonts/common-web/Arial.TTF");
+				loadFChars(128, "/usr/share/fonts/TTF/Roboto-Thin.ttf");
 			#endif
 		}
 		~UI() {}

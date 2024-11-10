@@ -61,7 +61,7 @@ class TextShader : public BaseShader {
 				return false;
 			}
 			glAttachShader(programID, fragmentShader);
-			
+
 			glLinkProgram(programID);	// Link
 			// Error check
 			glGetProgramiv(programID, GL_LINK_STATUS, &programSuccess);

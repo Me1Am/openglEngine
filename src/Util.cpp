@@ -15,6 +15,7 @@
 /// Individual Functions
 ///
 
+/// Gets the directory where the executable resides
 std::string Util::getWorkingDir() {
 	char buff[PATH_MAX];
 

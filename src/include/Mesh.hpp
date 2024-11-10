@@ -83,21 +83,25 @@ class Mesh {
 			// Draw
 			glBindVertexArray(vao);
 			glDrawElements(GL_TRIANGLES, static_cast<GLuint>(indices.size()), GL_UNSIGNED_INT, 0);
+			glBindTexture(GL_TEXTURE_2D, 0);
 			glBindVertexArray(0);
 		}
-		const std::vector<GLuint>& getIndices() {
+		const std::vector<GLuint>& getIndices() const {
 			return indices;
 		}
-		GLuint getVAO() {
+		const std::vector<Texture>& getTextures() const {
+			return textures;
+		}
+		GLuint getVAO() const {
 			return vao;
 		}
-		GLuint getVBO() {
+		GLuint getVBO() const {
 			return vbo;
 		}
-		GLuint getEBO() {
+		GLuint getEBO() const {
 			return ebo;
 		}
-		std::string getName() {
+		std::string getName() const {
 			return name;
 		}
 	private:

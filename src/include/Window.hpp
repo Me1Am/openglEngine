@@ -1,8 +1,11 @@
+#pragma once
+
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
 #include <SDL2/SDL_opengl.h>
 #include <GL/glu.h>
 
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -81,13 +84,14 @@ struct WindowCreationData {
 	uint32_t height = 480;
 	uint32_t sdlFlags = SDL_WINDOW_RESIZABLE;
 	uint32_t sdlSubsystems = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
-	WindowFlags flags;
+	WindowFlags flags = WindowFlags();
 	float minFrameTime = 16.66666667;
 };
 
 class Window {
 	public:
-		Window() {}
+		Window() : workingDir("") {}
+		Window(const std::string_view& workingDir) : workingDir(workingDir) {}
 		~Window() {
 			baseShader.freeProgram();
 			heightmap.freeProgram();
@@ -150,9 +154,9 @@ class Window {
 
 			// TODO Creat program args function to enable vsync
 			// Enable VSync
-			SDL_GL_SetSwapInterval(windowData.flags.vsync());
-			if(SDL_GL_GetSwapInterval() != 1){
-				std::cerr << "Warning: Unable to enable VSync, SDL_Error: " << SDL_GetError() << std::endl;
+			int status = SDL_GL_SetSwapInterval(windowData.flags.vsync());
+			if(status == -1){
+				std::cerr << "Warning: Unable to set VSync value, SDL_Error: " << SDL_GetError() << std::endl;
 			}
 
 			// Initialize shared variables
@@ -271,8 +275,8 @@ class Window {
 
 									// Normalize mouse position to [-1, 1]
 									glm::vec3 rayNDS = glm::vec3(
-										(2.f * windowData.inputData.xPos) / windowData.width - 1.f, 
-										1.f - (2.f * windowData.inputData.yPos) / windowData.height, 
+										(2.f * windowData.inputData.xPos) / windowData.width - 1.f,
+										1.f - (2.f * windowData.inputData.yPos) / windowData.height,
 										1.f
 									);
 
@@ -299,7 +303,7 @@ class Window {
 
 							camera.incFOV(-event.wheel.y * 2.5f);
 							break;
-						} 
+						}
 						case SDL_QUIT:	// Quit window
 							SDL_Quit();	// Cleanup subsystems
 							return;	// Exit loop
@@ -355,12 +359,12 @@ class Window {
 
 				// Camera position for view calculations
 				camera.updateCameraPosition(
-					KEYBOARD[SDL_SCANCODE_W], 
-					KEYBOARD[SDL_SCANCODE_S], 
-					KEYBOARD[SDL_SCANCODE_A], 
-					KEYBOARD[SDL_SCANCODE_D], 
-					KEYBOARD[SDL_SCANCODE_SPACE], 
-					KEYBOARD[SDL_SCANCODE_LCTRL], 
+					KEYBOARD[SDL_SCANCODE_W],
+					KEYBOARD[SDL_SCANCODE_S],
+					KEYBOARD[SDL_SCANCODE_A],
+					KEYBOARD[SDL_SCANCODE_D],
+					KEYBOARD[SDL_SCANCODE_SPACE],
+					KEYBOARD[SDL_SCANCODE_LCTRL],
 					*delta_t
 				);
 				camera.updateCameraDirection();
@@ -378,6 +382,8 @@ class Window {
 			}
 
 			heightfield->draw(heightmap, camera.calcCameraView(), camera.getFOV(), false);
+
+			sysManager.getSystem<GraphicsSystem>()->tick(baseShader, camera.calcCameraView(), camera.getFOV());
 
 			if(windowData.flags.debugDraw()){
 				Uint32 currentTime = SDL_GetTicks();
@@ -453,36 +459,66 @@ class Window {
 			heightfield = new Heightmap("../assets/heightmap.png");
 			physicsEngine->addRigidBody(heightfield->getRigidBody());
 
+			ComponentSet posID = compManager.registerComponent<PositionComponent>();
+			ComponentSet phsID = compManager.registerComponent<PhysicsComponent>();
+			ComponentSet renID = compManager.registerComponent<RenderComponent>();
+
+			std::cout << "Position: " << posID << '\n';
+			std::cout << "Physics: " << phsID << '\n';
+			std::cout << "Render: " << renID << '\n';
+
+			sysManager.registerSystem<PhysicsSystem>(
+				ComponentSet(posID | phsID),
+				static_cast<ComponentArray<PositionComponent>*>(compManager.getComponentArray<PositionComponent>()),
+				static_cast<ComponentArray<PhysicsComponent>*>(compManager.getComponentArray<PhysicsComponent>())
+			);
+			sysManager.registerSystem<GraphicsSystem>(
+				ComponentSet(posID | renID),
+				static_cast<ComponentArray<PositionComponent>*>(compManager.getComponentArray<PositionComponent>()),
+				static_cast<ComponentArray<RenderComponent>*>(compManager.getComponentArray<RenderComponent>())
+			);
+
+			Entity testModel = entityManager.create(); std::cout << "Entity: " << testModel << " created\n";
+			entityManager.setComponents(testModel, ComponentSet(posID | renID));
+			compManager.addComponent(testModel, (PositionComponent){ glm::translate(glm::mat4x4(1.f), glm::vec3(0, 0, 0)) });
+			compManager.addComponent(testModel, RenderComponent());
+			sysManager.entityChanged(testModel, ComponentSet(posID | renID));
+
+			compManager.getComponent<RenderComponent>(testModel)->model.initialize("../assets/character/character.obj");
+			std::cout << "ECS System created and initialized\n";
+
 			ui = new UI();
 			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
-				delta_t, 
+				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true),
+				delta_t,
 				[](DynamicText& e){ }
-			));
+			), "Roboto-Thin");
 			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Debugtime: <%>", { 1.f, 15.f }, { 1.f, 1.f, 1.f }, 0.25f, true), 
-				debugDrawTime, 
+				Text("Debugtime: <%>", { 1.f, 15.f }, { 1.f, 1.f, 1.f }, 0.25f, true),
+				debugDrawTime,
 				[](DynamicText& e){
 					if(e.dynamicVal.expired()) return;
 					e.visible = (*std::static_pointer_cast<Uint32>(e.dynamicVal.lock())) > 0;
 				}
-			));
+			), "Roboto-Thin");
 			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Paused", { 1.f, 28.f }, { 1.f, 0.f, 0.f }, 0.25f, true), 
-				pause, 
+				Text("Paused", { 1.f, 28.f }, { 1.f, 0.f, 0.f }, 0.25f, true),
+				pause,
 				[](DynamicText& e){
 					if(e.dynamicVal.expired()) return;
 					e.visible = *std::static_pointer_cast<bool>(e.dynamicVal.lock());
 				}
-			));
+			), "Roboto-Thin");
 
-			GLenum err = glGetError(); 
+			GLenum err = glGetError();
 			if(err != GL_NO_ERROR) {
 				std::cerr << "Unhandled OpenGL Error: " << err << std::endl;
 				return false;
 			}
 			return true;
 		}
+
+		std::string workingDir;
 
 		SDL_Window* window = NULL;
 		SDL_GLContext gContext = NULL;
@@ -497,4 +533,9 @@ class Window {
 		BaseShader baseShader;
 		BaseShader heightmap;
 		TextShader textShader;
+
+		// ECS
+		EntityManager entityManager;
+		ComponentManager compManager;
+		SystemManager sysManager;
 };
