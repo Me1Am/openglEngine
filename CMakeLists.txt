@@ -9,14 +9,13 @@ cmake_minimum_required(VERSION 3.20)
 # Project Setup
 project(openglEngine VERSION 1.0)
 
-set(SOURCES 
+set(SOURCES
 	"src/main.cpp"
 	"src/Util.cpp"
 	"src/Collision.cpp"
 
 	"src/include/Window.hpp"
 	"src/include/UI.hpp"
-	"src/include/Text.hpp"
 	"src/include/Util.hpp"
 	"src/include/Mesh.hpp"
 	"src/include/Model.hpp"
@@ -43,7 +42,7 @@ if(WIN32)
 	add_link_options("-lmingw32" "-lSDL2" "-lSDL2main")
 	add_executable(openglEngine)
 
-	target_include_directories(openglEngine PRIVATE 
+	target_include_directories(openglEngine PRIVATE
 		"C:/Users/JTK6759/Documents/apps/msys64/ucrt64/include/freetype2/"
 		"C:/Users/JTK6759/Documents/apps/msys64/ucrt64/include/bullet/"
 	)
