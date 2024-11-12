@@ -33,6 +33,7 @@ set(SOURCES
 	"src/include/shader/CubeShader.hpp"
 
 	"src/include/ecs/ECS.hpp"
+	"src/include/ecs/VehicleComponent.hpp"
 )
 
 if(WIN32)

@@ -22,6 +22,7 @@
 #include "Heightmap.hpp"
 
 #include "ecs/ECS.hpp"
+#include "ecs/VehicleComponent.hpp"
 
 #define CREATE_ERROR(msg, err) fprintf(stderr, "Window::init(): %s %i %c", msg, err, '\n'); return 0
 #define CREATE_GL_ERROR(msg) fprintf(stderr, "Window::initOpenGL(): %s %c", msg, '\n'); return false

@@ -247,7 +247,7 @@ struct PositionComponent {
 	glm::mat4x4 transform = glm::mat4x4(1.f);
 };
 
-/// @brief Holds a rigidbodyt`
+/// @brief Holds a rigidbody
 struct PhysicsComponent {
 	btRigidBody* rigidbody = nullptr;
 
