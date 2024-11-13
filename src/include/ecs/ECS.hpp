@@ -6,7 +6,6 @@
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <SDL2/SDL_scancode.h>
 #include <bullet/btBulletDynamicsCommon.h>
 #include <BulletWorldImporter/btBulletWorldImporter.h>
 
@@ -282,13 +281,6 @@ struct RenderComponent {
 	bool visible = true;
 };
 
-/// @brief Holds a map of SDL_Scancode(keys) to functions(values)
-/// @note The functions take either a PostitionComponent& or a PhysicsComponent& and a const Uint32 deltaTime(ms)
-struct ControlComponent {
-	std::unordered_map<SDL_Scancode, std::function<void(PositionComponent&, const Uint32&)>> positionKeyMap;
-	std::unordered_map<SDL_Scancode, std::function<void(PhysicsComponent&, const Uint32&)>> physicsKeyMap;
-};
-
 class System {
 	public:
 		System() = default;
@@ -297,48 +289,6 @@ class System {
 		/// @brief A unique set of entities
 		/// @note Cheaper to have a set of actual values as pointers are 8 bytes on x64 systems
 		std::set<Entity> entities;
-};
-
-/// @brief Controls input interactions
-class InputSystem : public System {
-	public:
-		InputSystem(const Uint8* keyboardState, ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, ComponentArray<ControlComponent>* controlCompArr)
-			: keyboardState(keyboardState), positionCompArr(positionCompArr), physicsCompArr(physicsCompArr), controlCompArr(controlCompArr) {}
-		~InputSystem() {}
-		/// @brief Initialize the system
-		void initialize(const Uint8* keyboardState, ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr, ComponentArray<ControlComponent>* controlCompArr) {
-			this->keyboardState = keyboardState;
-			this->positionCompArr = positionCompArr;
-			this->physicsCompArr = physicsCompArr;
-			this->controlCompArr = controlCompArr;
-		}
-		void tick(const Uint32& deltaTime) {
-			for(const Entity& entity : entities) {
-				ControlComponent* controlComponent = controlCompArr->get(entity);
-
-				for(const auto& [scancode, function] : controlComponent->positionKeyMap) {
-					if(keyboardState[scancode]){
-						PositionComponent* positionComponent = positionCompArr->get(entity);
-
-						function(*positionComponent, deltaTime);
-					}
-				}
-
-				for(const auto& [scancode, function] : controlComponent->physicsKeyMap) {
-					if(keyboardState[scancode]){
-						PhysicsComponent* physicsComponent = physicsCompArr->get(entity);
-
-						function(*physicsComponent, deltaTime);
-					}
-				}
-			}
-		}
-	private:
-		const Uint8* keyboardState;
-
-		ComponentArray<PositionComponent>* positionCompArr;
-		ComponentArray<PhysicsComponent>* physicsCompArr;
-		ComponentArray<ControlComponent>* controlCompArr;
 };
 
 /// @brief Controls physics interactions

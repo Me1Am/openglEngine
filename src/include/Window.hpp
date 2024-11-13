@@ -195,6 +195,7 @@ class Window {
 
 			// Main Event Loop
 			while(true) {
+			    // Process the current frame's events
 				while(SDL_PollEvent(&event)) {
 					// Main Event Handler
 					switch(event.type) {

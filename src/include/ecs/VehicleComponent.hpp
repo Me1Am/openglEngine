@@ -95,22 +95,18 @@ struct VehicleComponent : PhysicsComponent {
 };
 
 /// @brief Controls vehicle interactions
-/// @details Requires PositionComponent, PhysicsComponent, and VehicleComponent
+/// @details Requires VehicleComponent
 class VehicleSystem : public System {
     public:
-        VehicleSystem(ComponentArray<PositionComponent>* positionCompArr, ComponentArray<PhysicsComponent>* physicsCompArr,
-                      ComponentArray<VehicleComponent>* vehicleCompArr, btDynamicsWorld* dynamicsWorld)
-            : positionCompArr(positionCompArr), physicsCompArr(physicsCompArr), vehicleCompArr(vehicleCompArr),
-              dynamicsWorld(dynamicsWorld) {}
-        ~VehicleSystem() {}
+        VehicleSystem(ComponentArray<VehicleComponent>* vehicleCompArr, btDynamicsWorld* dynamicsWorld)
+            : vehicleCompArr(vehicleCompArr), dynamicsWorld(dynamicsWorld) {}
+        ~VehicleSystem() { }
         void tick(const Uint32& deltaTime) { }
         /// @brief Attempts to free a vehicle that is flipped or stuck
         /// @detail Resets the rotation and moves the vehicle up 10 units
         void reset() { }
     private:
         // Component dependencies
-        ComponentArray<PositionComponent>* positionCompArr;
-        ComponentArray<PhysicsComponent>* physicsCompArr;
         ComponentArray<VehicleComponent>* vehicleCompArr;
 
         btDynamicsWorld* dynamicsWorld;   // Dynamics world from PhysicsSystem
