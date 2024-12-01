@@ -89,13 +89,7 @@ class Window {
 	public:
 		Window() : workingDir("") {}
 		Window(const std::string_view& workingDir) : workingDir(workingDir) {}
-		~Window() {
-			textShader.freeProgram();
-
-			SDL_DestroyWindow(window);
-
-			delete ui;
-		}
+		~Window() { SDL_DestroyWindow(window); }
 		/// Initializes subsystems and creates the window and other resources
 		int init(const WindowCreationData& creationData) {
 			// Update windowData defaults
@@ -128,8 +122,18 @@ class Window {
 				CREATE_ERROR("Unable to initialize GLEW, GLEW Error: ", glewGetErrorString(glewStatus));
 			}
 
-			if(!initOpenGL()){
-				std::cerr << "Unable to initialize OpenGL" << std::endl;
+			glViewport(0, 0, windowData.width, windowData.height);
+
+			// OpenGL settings, move to main?
+			glEnable(GL_CULL_FACE);
+			glEnable(GL_DEPTH_TEST);
+			glDepthFunc(GL_LESS);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+			GLenum err = glGetError();
+			if(err != GL_NO_ERROR) {
+				std::cerr << "Unhandled OpenGL Error: " << err << std::endl;
 				return 0;
 			}
 
@@ -174,11 +178,6 @@ class Window {
 		}
 		/// --- Variables --- ///
 
-		// TODO Assimilate these into WindowData when revamping UI.hpp
-		std::shared_ptr<Uint32> delta_t;		// The running time between frames
-		std::shared_ptr<Uint32> debugDrawTime;	// The time it takes to draw physics colliders
-		std::shared_ptr<bool> pause;
-
 		/// @brief Collection of window-specific data
 		struct WindowData {
 			// Time (seconds)
@@ -207,61 +206,8 @@ class Window {
 			} inputData;
 		} windowData;
 	private:
-		/// @brief Initializes OpenGL components
-		bool initOpenGL() {
-			GLint status = GL_FALSE;
-
-			glViewport(0, 0, windowData.width, windowData.height);
-			glEnable(GL_CULL_FACE);
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LESS);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-			if(!textShader.loadProgram("../shaders/text.vert", "../shaders/text.frag")){
-				CREATE_GL_ERROR("Unable to load UI text shader");
-			}
-
-			ui = new UI();
-			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Frametime: <%>", { 1.f, 2.f }, { 1.f, 1.f, 1.f }, 0.25f, true),
-				delta_t,
-				[](DynamicText& e){ }
-			), "Roboto-Thin");
-			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Debugtime: <%>", { 1.f, 15.f }, { 1.f, 1.f, 1.f }, 0.25f, true),
-				debugDrawTime,
-				[](DynamicText& e){
-					if(e.dynamicVal.expired()) return;
-					e.visible = (*std::static_pointer_cast<Uint32>(e.dynamicVal.lock())) > 0;
-				}
-			), "Roboto-Thin");
-			ui->addTextElement(std::make_unique<DynamicText>(
-				Text("Paused", { 1.f, 28.f }, { 1.f, 0.f, 0.f }, 0.25f, true),
-				pause,
-				[](DynamicText& e){
-					if(e.dynamicVal.expired()) return;
-					e.visible = *std::static_pointer_cast<bool>(e.dynamicVal.lock());
-				}
-			), "Roboto-Thin");
-
-			GLenum err = glGetError();
-			if(err != GL_NO_ERROR) {
-				std::cerr << "Unhandled OpenGL Error: " << err << std::endl;
-				return false;
-			}
-			return true;
-		}
-
 		std::string workingDir;
 
 		SDL_Window* window = NULL;
 		SDL_GLContext gContext = NULL;
-
-		// Components
-		UI* ui;
-		Camera camera;
-
-		// Shaders
-		TextShader textShader;
 };

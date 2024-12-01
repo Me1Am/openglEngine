@@ -5,13 +5,16 @@
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
+#include <any>
 #include <bullet/LinearMath/btIDebugDraw.h>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <string_view>
 #include <memory>
 
 #include "include/Heightmap.hpp"
+#include "include/UI.hpp"
 #include "include/PhysicsEngine.hpp"
 #include "include/Window.hpp"
 #include "include/Util.hpp"
@@ -29,9 +32,12 @@ SystemManager sysManager;
 Camera camera;
 
 // Temporary variables for testing
-BaseShader baseShader;
 Heightmap* heightfield;
+BaseShader baseShader;
+TextShader textShader;
 BaseShader heightmap;
+
+
 
 struct TimeData {
     float minFrameTime = 16.66666667f;  // The minimum time the frame should take (ms)
@@ -108,6 +114,7 @@ int processEvents() {
                 break;
             } case SDL_KEYDOWN: {
                 if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                    globalState.flags.showUI = globalState.flags.paused;
                     globalState.flags.paused = !globalState.flags.paused;
 
                     if(globalState.flags.paused) {
@@ -266,19 +273,19 @@ int main(int argc, char** argv) {
             ComponentSet(posID | renID),
             static_cast<ComponentArray<PositionComponent>*>(compManager.getComponentArray<PositionComponent>()),
             static_cast<ComponentArray<RenderComponent>*>(compManager.getComponentArray<RenderComponent>())
-		);
+        );
 
-		// Test model
-		Entity testModel = entityManager.create();
-		std::cout << "Entity: " << testModel << " created\n";
+        // Test model
+        Entity testModel = entityManager.create();
+        std::cout << "Entity: " << testModel << " created\n";
 
-		entityManager.setComponents(testModel, ComponentSet(posID | renID));
-		compManager.addComponent(testModel, (PositionComponent){ glm::translate(glm::mat4x4(1.f), glm::vec3(0, 0, 0)) });
-		compManager.addComponent(testModel, RenderComponent());
-		sysManager.entityChanged(testModel, ComponentSet(posID | renID));
+        entityManager.setComponents(testModel, ComponentSet(posID | renID));
+        compManager.addComponent(testModel, (PositionComponent){ glm::translate(glm::mat4x4(1.f), glm::vec3(0, 0, 0)) });
+        compManager.addComponent(testModel, RenderComponent());
+        sysManager.entityChanged(testModel, ComponentSet(posID | renID));
 
-		compManager.getComponent<RenderComponent>(testModel)->model.initialize("../assets/character/character.obj");
-		std::cout << "ECS System created and initialized\n";
+        compManager.getComponent<RenderComponent>(testModel)->model.initialize("../assets/character/character.obj");
+        std::cout << "ECS System created and initialized\n";
     }
 
     // Test Objects
@@ -288,10 +295,11 @@ int main(int argc, char** argv) {
 
         baseShader.loadProgram("../shaders/texture.vert", "../shaders/pureTexture.frag", "", "");
         heightmap.loadProgram("../shaders/heightmap.vert", "../shaders/heightmap.frag", "../shaders/heightmap.tesc", "../shaders/heightmap.tese");
+        textShader.loadProgram("../shaders/text.vert", "../shaders/text.frag");
     }
+
     // Main loop
     while(processEvents() == 0) {
-
         // Update deltaT
         globalState.time.deltaT = SDL_GetTicks() - globalState.time.prevTickTime;
         globalState.time.prevTickTime = SDL_GetTicks();
